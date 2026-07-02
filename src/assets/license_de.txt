@@ -1,0 +1,12 @@
+immo24 EventPipe – Lizenzbedingungen (DE)
+
+Diese Software wird unter der GNU Affero General Public License v3.0 (AGPL-3.0) bereitgestellt.
+Volltext siehe beiliegende Datei LICENSE oder https://www.gnu.org/licenses/agpl-3.0.html.
+
+Kurzüberblick (nicht rechtsverbindlich):
+• Nutzung, Änderung, Weitergabe unter AGPL-3.0
+• Bei Bereitstellung (auch als Service) Offenlegung des vollständigen Quellcodes inkl. Änderungen
+• Marken/Namen/Logos sind ausgeschlossen
+• Dritt-Lizenzen (MIT/Apache) bleiben bestehen
+
+Durch „Zustimmen“ erkennen Sie die Bedingungen an.

@@ -1,0 +1,11 @@
+Diese Software wird als Quelltext unter der GNU Affero General Public License v3.0 (AGPL-3.0) veröffentlicht.
+Die vollständige Lizenz finden Sie in der Datei LICENSE sowie online unter https://www.gnu.org/licenses/agpl-3.0.html.
+
+Wesentliche Punkte (Zusammenfassung, nicht ersetzend):
+- Nutzung, Veränderung und Weitergabe sind unter den Bedingungen der AGPL-3.0 erlaubt.
+- Wenn Sie die Software verändern und bereitstellen (auch über ein Netzwerk/als Dienst), müssen Sie den vollständigen
+  Quellcode einschließlich Ihrer Änderungen der Empfängergruppe zugänglich machen.
+- Marken, Namen und Logos des Projekts sind nicht Bestandteil der Lizenz.
+- Drittanbieterkomponenten bleiben unter ihren jeweiligen MIT/Apache-Lizenzen.
+
+Mit „Weiter“ bestätigen Sie, dass Sie diese Bedingungen gelesen haben und akzeptieren.

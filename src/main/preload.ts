@@ -1,0 +1,35 @@
+import { contextBridge, ipcRenderer, webUtils } from 'electron'
+
+import type {
+  AnalyzeMxfResult,
+  AnalyzeWavResult,
+  ExportJobRequest,
+  ExportJobResult,
+  ExportHistoryEntry,
+  ExportProgressUpdate,
+  EventPipeSettings,
+  SettingsSnapshot,
+} from '../shared/types'
+
+const api = {
+  analyzeMxf: (mxfPath: string): Promise<AnalyzeMxfResult> => ipcRenderer.invoke('eventpipe:analyze-mxf', mxfPath),
+  analyzeWav: (wavPath: string): Promise<AnalyzeWavResult> => ipcRenderer.invoke('eventpipe:analyze-wav', wavPath),
+  exportJob: (request: ExportJobRequest): Promise<ExportJobResult> => ipcRenderer.invoke('eventpipe:export-job', request),
+  getSettings: (): Promise<SettingsSnapshot> => ipcRenderer.invoke('eventpipe:get-settings'),
+  saveSettings: (settings: Partial<EventPipeSettings>): Promise<SettingsSnapshot> =>
+    ipcRenderer.invoke('eventpipe:save-settings', settings),
+  getExportHistory: (limit?: number): Promise<ExportHistoryEntry[]> =>
+    ipcRenderer.invoke('eventpipe:get-export-history', limit),
+  pickDirectory: (initialPath?: string): Promise<string | undefined> =>
+    ipcRenderer.invoke('eventpipe:pick-directory', initialPath),
+  onExportProgress: (listener: (update: ExportProgressUpdate) => void): (() => void) => {
+    const handler = (_event: Electron.IpcRendererEvent, update: ExportProgressUpdate) => {
+      listener(update)
+    }
+    ipcRenderer.on('eventpipe:export-progress', handler)
+    return () => ipcRenderer.off('eventpipe:export-progress', handler)
+  },
+  getPathForFile: (file: File): string => webUtils.getPathForFile(file),
+}
+
+contextBridge.exposeInMainWorld('eventPipe', api)

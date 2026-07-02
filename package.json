@@ -1,0 +1,71 @@
+{
+  "name": "immo24-eventpipe",
+  "private": true,
+  "version": "1.0.0-beta",
+  "type": "module",
+  "main": "dist-electron/index.js",
+  "author": "Philipp Menzel",
+  "license": "AGPL-3.0-only",
+  "scripts": {
+    "dev": "vite --port 5173 --strictPort",
+    "build": "vue-tsc -b && vite build",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "dist": "npm run build && electron-builder",
+    "dist:mac": "npm run build && electron-builder --mac dmg --arm64",
+    "dist:win": "npm run build && electron-builder --win nsis --x64"
+  },
+  "dependencies": {
+    "vue": "^3.5.39"
+  },
+  "devDependencies": {
+    "@types/node": "^24.13.2",
+    "@vitejs/plugin-vue": "^6.0.7",
+    "@vue/tsconfig": "^0.9.1",
+    "electron": "^39.8.5",
+    "electron-builder": "^26.0.12",
+    "esbuild": "^0.28.1",
+    "typescript": "~6.0.2",
+    "vite": "^8.1.1",
+    "vite-plugin-electron": "^0.29.0",
+    "vite-plugin-electron-renderer": "^0.14.6",
+    "vitest": "^4.0.3",
+    "vue-tsc": "^3.3.5"
+  },
+  "build": {
+    "appId": "de.immo24.eventpipe",
+    "productName": "immo24 EventPipe",
+    "files": [
+      "dist/**/*",
+      "dist-electron/**/*",
+      "package.json"
+    ],
+    "asar": true,
+    "mac": {
+      "icon": "src/assets/icon.icns",
+      "target": [
+        "dmg"
+            ],
+      "category": "public.app-category.utilities"
+    },
+    "win": {
+      "icon": "src/assets/icon.ico",
+      "target": [
+        "nsis"
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": true,
+      "allowElevation": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "license": "assets/license.txt",
+      "deleteAppDataOnUninstall": true
+    },
+    "directories": {
+      "output": "release"
+    }
+
+  }
+}
