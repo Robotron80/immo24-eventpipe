@@ -15,6 +15,12 @@ const inputRef = ref<HTMLInputElement | null>(null)
 
 const isValid = computed(() => props.modelValue.trim().length > 0)
 
+function onFilenameInput(event: Event): void {
+  const rawValue = (event.target as HTMLInputElement).value
+  const normalizedValue = rawValue.replace(/\.mxf$/i, '')
+  emit('update:modelValue', normalizedValue)
+}
+
 onMounted(async () => {
   await nextTick()
   inputRef.value?.focus()
@@ -24,24 +30,30 @@ onMounted(async () => {
 
 <template>
   <section class="overlay">
-    <div class="dialog dialog--filename">
+    <div class="dialog dialog--checks dialog--filename dialog--workflow-page dialog--workflow-filename">
       <header class="dialog-header">
         <div>
           <h2>Dateiname für Export</h2>
-          <p>Geben Sie einen Namen für die MXF-Datei ein (ohne Dateityp):</p>
+          <p>Bitte Exportnamen festlegen</p>
         </div>
       </header>
 
       <div class="dialog-body">
-        <input
-          ref="inputRef"
-          :value="modelValue"
-          type="text"
-          class="filename-input"
-          placeholder="z.B. mein_export"
-          @input="emit('update:modelValue', ($event.target as HTMLInputElement).value)"
-          @keyup.enter="emit('confirm')"
-        />
+        <section class="workflow-filename-content">
+          <label class="workflow-filename-label" for="workflow-export-name">Dateiname</label>
+          <div class="workflow-filename-input-wrap">
+            <input
+              id="workflow-export-name"
+              ref="inputRef"
+              :value="modelValue"
+              type="text"
+              class="filename-input filename-input--with-suffix"
+              placeholder="Story_DFB"
+              @input="onFilenameInput"
+            />
+            <span class="workflow-filename-suffix" aria-hidden="true">.mxf</span>
+          </div>
+        </section>
       </div>
 
       <footer class="dialog-footer">

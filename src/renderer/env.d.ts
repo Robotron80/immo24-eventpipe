@@ -18,7 +18,10 @@ declare global {
       getSettings: () => Promise<SettingsSnapshot>
       saveSettings: (settings: Partial<EventPipeSettings>) => Promise<SettingsSnapshot>
       getExportHistory: (limit?: number) => Promise<ExportHistoryEntry[]>
+      openWorkflowWindow: (payload?: { mxfPath?: string; wavPath?: string }) => Promise<boolean>
+      getWorkflowStartPayload: () => Promise<{ mxfPath?: string; wavPath?: string } | undefined>
       pickDirectory: (initialPath?: string) => Promise<string | undefined>
+      openPath: (targetPath: string) => Promise<boolean>
       onExportProgress: (listener: (update: ExportProgressUpdate) => void) => () => void
       getPathForFile: (file: File) => string
     }

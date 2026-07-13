@@ -1,15 +1,13 @@
 import { computed, ref } from 'vue'
 
 import type { AudioMappingEntry, WavType } from '../../shared/types'
-import type { UseAnalysisChecksStateOptions } from './types'
+import type { UseFileAnalysisStateOptions } from './types'
 
-export function useAnalysisChecksState(options: UseAnalysisChecksStateOptions) {
+export function useFileAnalysisState(options: UseFileAnalysisStateOptions) {
   const { isExporting } = options
 
+  // Duration mismatch above tolerance is treated as blocking warning in current workflow.
   const durationToleranceSeconds = 0.2
-
-  const showChecksDialog = ref(false)
-  const dialogStep = ref<'checks' | 'mapping'>('checks')
 
   const mxfAnalysisState = ref<'idle' | 'ok' | 'error'>('idle')
   const wavAnalysisState = ref<'idle' | 'running' | 'ok' | 'error'>('idle')
@@ -29,6 +27,7 @@ export function useAnalysisChecksState(options: UseAnalysisChecksStateOptions) {
   const wavAnalysisError = ref<string>()
   const mapping = ref<AudioMappingEntry[]>([])
 
+  // If bridge is missing, we are not in the Electron context and cannot call backend IPC.
   const bridgeAvailable = typeof window !== 'undefined' && typeof window.eventPipe !== 'undefined'
 
   function getEventPipeApi() {
@@ -131,7 +130,7 @@ export function useAnalysisChecksState(options: UseAnalysisChecksStateOptions) {
       trackNames.value = analysis.classification.trackNames
       reason.value = analysis.classification.reason
       mapping.value =
-        analysis.classification.type === 'legacy-surround-print'
+        analysis.classification.type === 'legacy-surround-track'
           ? withLegacyChannelNames(analysis.mapping, analysis.probe.channelLayout)
           : analysis.mapping
       wavAnalysisState.value = 'ok'
@@ -199,10 +198,6 @@ export function useAnalysisChecksState(options: UseAnalysisChecksStateOptions) {
     )
   })
 
-  const canContinue = computed(() => {
-    return canExport.value
-  })
-
   const allChecksOk = computed(() => {
     return Boolean(
       mxfAnalysisState.value === 'ok' &&
@@ -216,28 +211,6 @@ export function useAnalysisChecksState(options: UseAnalysisChecksStateOptions) {
     )
   })
 
-  const showStatusPanelInDialog = computed(() => {
-    return dialogStep.value === 'checks'
-  })
-
-  const showMappingPreviewInDialog = computed(() => {
-    return dialogStep.value === 'mapping'
-  })
-
-  const dialogTitle = computed(() => {
-    return dialogStep.value === 'checks' ? 'Status and Checks' : 'Mapping Preview'
-  })
-
-  const dialogDescription = computed(() => {
-    return dialogStep.value === 'checks'
-      ? 'Bitte Pruefung bestaetigen, bevor die Mapping-Preview und der Export starten.'
-      : 'Bitte Mapping pruefen und Export starten.'
-  })
-
-  const dialogPrimaryLabel = computed(() => {
-    return dialogStep.value === 'checks' ? 'Weiter' : 'Export starten'
-  })
-
   const durationCheckMessage = computed(() => {
     if (durationCheckState.value === 'unknown') {
       return '-'
@@ -248,17 +221,17 @@ export function useAnalysisChecksState(options: UseAnalysisChecksStateOptions) {
     }
 
     if (typeof mxfDurationSeconds.value !== 'number' || typeof wavDurationSeconds.value !== 'number') {
-      return 'Warning'
+      return 'Warnung'
     }
 
     const delta = Math.abs(mxfDurationSeconds.value - wavDurationSeconds.value).toFixed(3)
-    const longer = mxfDurationSeconds.value > wavDurationSeconds.value ? 'MXF is longer' : 'WAV is longer'
-    return `Warning (${longer} by ${delta} s)`
+    const longer = mxfDurationSeconds.value > wavDurationSeconds.value ? 'Video' : 'Audio'
+    return `${longer} ist ${delta}s länger`
   })
 
   async function onFilesDropped(payload: { mxfPath?: string; wavPath?: string }): Promise<void> {
     if (!bridgeAvailable) {
-      error.value = 'Desktop bridge missing. Open and use the Electron app window.'
+      error.value = 'Desktop-Bridge fehlt. Bitte oeffnen und nutzen Sie das Electron-App-Fenster.'
       return
     }
 
@@ -273,24 +246,6 @@ export function useAnalysisChecksState(options: UseAnalysisChecksStateOptions) {
     if (!payload.wavPath && wavPath.value && wavAnalysisState.value !== 'ok') {
       await applyWav(wavPath.value)
     }
-
-    if (mxfPath.value && wavPath.value) {
-      dialogStep.value = allChecksOk.value ? 'mapping' : 'checks'
-      showChecksDialog.value = true
-    }
-  }
-
-  function continueChecksFlow(): boolean {
-    if (dialogStep.value === 'checks') {
-      if (!canContinue.value) {
-        return false
-      }
-
-      dialogStep.value = 'mapping'
-      return false
-    }
-
-    return true
   }
 
   function resetAnalysisState(): void {
@@ -311,21 +266,13 @@ export function useAnalysisChecksState(options: UseAnalysisChecksStateOptions) {
     mxfAnalysisError.value = undefined
     wavAnalysisError.value = undefined
     mapping.value = []
-    showChecksDialog.value = false
-    dialogStep.value = 'checks'
   }
 
   return {
     allChecksOk,
     bridgeAvailable,
-    canContinue,
     canExport,
-    continueChecksFlow,
     detectedWavType,
-    dialogDescription,
-    dialogPrimaryLabel,
-    dialogStep,
-    dialogTitle,
     durationCheckMessage,
     durationCheckState,
     error,
@@ -336,9 +283,6 @@ export function useAnalysisChecksState(options: UseAnalysisChecksStateOptions) {
     onFilesDropped,
     reason,
     resetAnalysisState,
-    showChecksDialog,
-    showMappingPreviewInDialog,
-    showStatusPanelInDialog,
     wavAnalysisError,
     wavAnalysisState,
     wavPath,

@@ -1,14 +1,17 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 
 import { useExportDialogState } from './composables/useExportDialogState'
-import { useAnalysisChecksState } from './composables/useAnalysisChecksState'
+import { useFileAnalysisState } from './composables/useFileAnalysisState'
 import { useExportExecution } from './composables/useExportExecution'
+import { useWorkflowState } from './composables/useWorkflowState'
+import { useWizardController } from './composables/useWizardController'
 import DropZone from './components/DropZone.vue'
-import ChecksDialog from './components/ChecksDialog.vue'
 import ExportFilenameDialog from './components/ExportFilenameDialog.vue'
 import ExportResultDialog from './components/ExportResultDialog.vue'
 import ExportRunningDialog from './components/ExportRunningDialog.vue'
+import WorkflowChecksPage from './components/WorkflowChecksPage.vue'
+import WorkflowMappingPage from './components/WorkflowMappingPage.vue'
 
 // Main UI flow in simple terms:
 // 1) User drops MXF + WAV
@@ -21,17 +24,20 @@ const isExporting = ref(false)
 const showExportDialog = ref(false)
 const showFilenameDialog = ref(false)
 const filenameDialogDraft = ref<string>('')
+const isWorkflowWindow = computed(() => {
+  if (typeof window === 'undefined') {
+    return false
+  }
 
+  return new URLSearchParams(window.location.search).get('window') === 'workflow'
+})
+
+// Analysis/check state: everything related to file validation and mapping preparation.
 const {
+  allChecksOk,
   bridgeAvailable,
-  canContinue,
   canExport,
-  continueChecksFlow,
   detectedWavType,
-  dialogDescription,
-  dialogPrimaryLabel,
-  dialogStep,
-  dialogTitle,
   durationCheckMessage,
   durationCheckState,
   error,
@@ -42,30 +48,39 @@ const {
   onFilesDropped: analyzeDroppedFiles,
   reason,
   resetAnalysisState,
-  showChecksDialog,
-  showMappingPreviewInDialog,
-  showStatusPanelInDialog,
   wavAnalysisError,
   wavAnalysisState,
   wavPath,
   wavPcmCheckState,
   wavType,
-} = useAnalysisChecksState({
+} = useFileAnalysisState({
   isExporting,
 })
 
 const {
+  canContinue,
+  continueWorkflowStep,
+  dialogDescription,
+  dialogStep,
+  dialogTitle,
+  openWorkflowChecks,
+  resetWorkflowState,
+  showChecksDialog,
+} = useWorkflowState({
+  allChecksOk,
+  canExport,
+})
+
+// Export dialog state: progress, logs and copy actions.
+const {
   exportMessage,
   exportProgressPercent,
   exportProgressDetails,
+  exportDurationLabel,
   exportLogPath,
-  exportDetails,
-  copyLogStatus,
-  copyDetailsStatus,
-  recentExportHistory,
+  logOpenStatus,
   exportDialogTitle,
-  copyLogPath,
-  copyExportDetails,
+  openExportLog,
   resetForNewExport,
 } = useExportDialogState({
   isExporting,
@@ -73,11 +88,12 @@ const {
   bridgeAvailable,
 })
 
+// Export execution: the actual IPC call that starts backend export processing.
 const { proceedWithExport } = useExportExecution({
   canExport,
   detectedWavType,
   error,
-  exportDetails,
+  exportDurationLabel,
   exportLogPath,
   exportMessage,
   filenameDialogDraft,
@@ -85,7 +101,6 @@ const { proceedWithExport } = useExportExecution({
   mapping,
   mxfPath,
   reason,
-  recentExportHistory,
   resetForNewExport,
   showExportDialog,
   showFilenameDialog,
@@ -93,81 +108,82 @@ const { proceedWithExport } = useExportExecution({
   wavType,
 })
 
-async function onFilesDropped(payload: { mxfPath?: string; wavPath?: string }): Promise<void> {
-  exportMessage.value = undefined
-  await analyzeDroppedFiles(payload)
+const {
+  cancelChecksDialog,
+  cancelFilenameDialog,
+  clearWorkspace,
+  closeExportDialog,
+  continueWorkflow,
+  handleWorkflowKeydown,
+  onFilesDropped,
+} = useWizardController({
+  canContinue,
+  canExport,
+  continueWorkflowStep,
+  dialogStep,
+  exportMessage,
+  filenameDialogDraft,
+  isExporting,
+  isWorkflowWindow,
+  mxfPath,
+  openWorkflowChecks,
+  proceedWithExport,
+  resetAnalysisState,
+  resetForNewExport,
+  resetWorkflowState,
+  showChecksDialog,
+  showExportDialog,
+  showFilenameDialog,
+  wavPath,
+})
+
+async function handleFilesDropped(payload: { mxfPath?: string; wavPath?: string }): Promise<void> {
+  await onFilesDropped(analyzeDroppedFiles, payload, bridgeAvailable)
 }
 
-function clearWorkspace(clearExportMessage = true): void {
-  resetAnalysisState()
-  isExporting.value = false
-  showExportDialog.value = false
-  showFilenameDialog.value = false
-  filenameDialogDraft.value = ''
-  resetForNewExport()
-  recentExportHistory.value = []
+onMounted(async () => {
+  window.addEventListener('keydown', handleWorkflowKeydown)
 
-  if (clearExportMessage) {
-    exportMessage.value = undefined
-  }
-}
-
-async function continueToMappingPreview(): Promise<void> {
-  if (!continueChecksFlow()) {
+  if (!isWorkflowWindow.value || !bridgeAvailable) {
     return
   }
 
-  // Show filename dialog before exporting
-  const sourceName = mxfPath.value 
-    ? decodeURIComponent(mxfPath.value.split(/[\\/]/).pop()?.replace(/\.[^.]+$/, '') || 'export')
-    : 'export'
-  filenameDialogDraft.value = sourceName || 'export'
-  showChecksDialog.value = false
-  showFilenameDialog.value = true
-}
-
-function cancelChecksDialog(): void {
-  clearWorkspace(true)
-}
-
-function cancelFilenameDialog(): void {
-  showFilenameDialog.value = false
-  showChecksDialog.value = true
-}
-
-function closeExportDialog(): void {
-  if (isExporting.value) {
-    return
+  const startPayload = await window.eventPipe.getWorkflowStartPayload()
+  if (startPayload?.mxfPath || startPayload?.wavPath) {
+    await handleFilesDropped(startPayload)
   }
+})
 
-  clearWorkspace(true)
-}
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', handleWorkflowKeydown)
+})
 
 </script>
 
 <template>
-  <main class="app-shell">
-    <section class="workspace">
+  <main class="app-shell" :class="{ 'app-shell--workflow': isWorkflowWindow }">
+    <section class="workspace" :class="{ 'workspace--workflow': isWorkflowWindow }">
       <section v-if="!bridgeAvailable" class="panel">
-        <h3>Desktop Bridge Missing</h3>
+        <h3>Desktop-Bridge fehlt</h3>
         <p>
-          This view is running without Electron preload bridge. Please use the Electron desktop window started by npm
-          run dev, not a standalone browser tab.
+          Diese Ansicht laeuft ohne Electron-Preload-Bridge. Bitte nutzen Sie das mit `npm run dev` gestartete
+          Electron-Fenster und keinen normalen Browser-Tab.
         </p>
       </section>
 
-      <DropZone :mxf-path="mxfPath" :wav-path="wavPath" @files-dropped="onFilesDropped" @clear="clearWorkspace" />
+      <DropZone
+        v-if="!isWorkflowWindow"
+        :mxf-path="mxfPath"
+        :wav-path="wavPath"
+        @files-dropped="handleFilesDropped"
+        @clear="clearWorkspace"
+      />
 
-      <ChecksDialog
-        v-if="showChecksDialog"
+      <WorkflowChecksPage
+        v-if="isWorkflowWindow && showChecksDialog && dialogStep === 'checks'"
         :dialog-title="dialogTitle"
         :dialog-description="dialogDescription"
-        :dialog-primary-label="dialogPrimaryLabel"
-        :dialog-step="dialogStep"
-        :show-status-panel-in-dialog="showStatusPanelInDialog"
-        :show-mapping-preview-in-dialog="showMappingPreviewInDialog"
         :can-continue="canContinue"
-        :can-export="canExport"
         :wav-type="wavType"
         :mxf-analysis-state="mxfAnalysisState"
         :wav-analysis-state="wavAnalysisState"
@@ -177,34 +193,40 @@ function closeExportDialog(): void {
         :duration-check-state="durationCheckState"
         :duration-check-message="durationCheckMessage"
         :error="error"
-        :mapping="mapping"
         @cancel="cancelChecksDialog"
-        @continue="continueToMappingPreview"
+        @continue="continueWorkflow"
+      />
+
+      <WorkflowMappingPage
+        v-if="isWorkflowWindow && showChecksDialog && dialogStep === 'mapping'"
+        :dialog-title="dialogTitle"
+        :can-export="canExport"
+        :mapping="mapping"
+        :wav-type="wavType"
+        @cancel="cancelChecksDialog"
+        @continue="continueWorkflow"
       />
 
       <ExportRunningDialog
-        v-if="showExportDialog && isExporting"
+        v-if="isWorkflowWindow && showExportDialog && isExporting"
         :progress-percent="exportProgressPercent"
         :progress-details="exportProgressDetails"
       />
 
       <ExportResultDialog
-        v-else-if="showExportDialog"
+        v-else-if="isWorkflowWindow && showExportDialog"
         :title="exportDialogTitle"
         :error="error"
         :export-message="exportMessage"
+        :export-duration-label="exportDurationLabel"
         :export-log-path="exportLogPath"
-        :export-details="exportDetails"
-        :copy-log-status="copyLogStatus"
-        :copy-details-status="copyDetailsStatus"
-        :recent-export-history="recentExportHistory"
-        @copy-log-path="copyLogPath"
-        @copy-export-details="copyExportDetails"
+        :log-open-status="logOpenStatus"
+        @open-log="openExportLog"
         @close="closeExportDialog"
       />
 
       <ExportFilenameDialog
-        v-if="showFilenameDialog"
+        v-if="isWorkflowWindow && showFilenameDialog"
         v-model="filenameDialogDraft"
         @cancel="cancelFilenameDialog"
         @confirm="proceedWithExport"

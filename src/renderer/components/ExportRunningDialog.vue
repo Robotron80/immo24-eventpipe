@@ -7,7 +7,7 @@ defineProps<{
 
 <template>
   <section class="overlay">
-    <div class="dialog dialog--checks">
+    <div class="dialog dialog--checks dialog--workflow-page dialog--workflow-running">
       <header class="dialog-header">
         <div>
           <h2>Export läuft</h2>
@@ -16,7 +16,7 @@ defineProps<{
       </header>
 
       <div class="dialog-body">
-        <section class="panel export-result-panel">
+        <section class="workflow-running-content">
           <h3>Status</h3>
           <p class="export-running">Export läuft...</p>
 

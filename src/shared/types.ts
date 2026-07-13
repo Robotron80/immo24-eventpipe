@@ -1,6 +1,6 @@
 export type SupportedChannelCount = 2 | 4 | 6 | 8
 
-export type WavType = 'bounce-polywav' | 'legacy-surround-print' | 'unknown'
+export type WavType = 'multitrack-wav' | 'legacy-surround-track' | 'unknown'
 
 export interface AudioMappingEntry {
   mxfTrack: number

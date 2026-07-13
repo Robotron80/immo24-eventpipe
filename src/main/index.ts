@@ -1,35 +1,29 @@
 import path from 'node:path'
 import fs from 'node:fs'
 import { fileURLToPath } from 'node:url'
-import { app, BrowserWindow, dialog, ipcMain, Menu, type OpenDialogOptions } from 'electron'
+import { app, BrowserWindow, Menu } from 'electron'
 import settingsHtml from './settings.html?raw'
+import settingsScript from './settings.js?raw'
+import settingsStyle from './settings.css?raw'
 import splashHtml from './splash.html?raw'
+import splashStyle from './splash.css?raw'
 
-import { classifyWav } from '../shared/classifier'
-import { buildBounceMapping, buildLegacyMapping, isSupportedChannelCount } from '../shared/mapping'
-import type {
-  AnalyzeMxfResult,
-  AnalyzeWavResult,
-  EventPipeSettings,
-  ExportHistoryEntry,
-  ExportJobRequest,
-  ExportJobResult,
-} from '../shared/types'
-import { exportMxfWithMappedAudio } from './ffmpegService'
-import { analyzeMxfWithFfprobe, analyzeWavWithFfprobe } from './ffprobeService'
-import { appendExportHistory, getExportHistoryPath, readExportHistory } from './historyService'
+import type { EventPipeSettings } from '../shared/types'
+import { getExportHistoryPath } from './historyService'
 import { writeLog } from './logService'
+import { registerIpcHandlers } from './registerIpcHandlers'
 import {
   DEFAULT_SETTINGS,
   getConfigPath,
   hasSettingsFile,
   loadSettings,
-  saveSettings,
 } from './settingsService'
 
 let mainWindow: BrowserWindow | null = null
 let splashWindow: BrowserWindow | null = null
 let settingsWindow: BrowserWindow | null = null
+let workflowWindow: BrowserWindow | null = null
+const workflowStartPayloadByWebContentsId = new Map<number, { mxfPath?: string; wavPath?: string }>()
 let splashShownAt = 0
 let activeSettings: EventPipeSettings = { ...DEFAULT_SETTINGS }
 let activeConfigPath = ''
@@ -44,6 +38,29 @@ const hasSingleInstanceLock = app.requestSingleInstanceLock()
 
 if (!hasSingleInstanceLock) {
   app.quit()
+}
+
+function getDevServerOrigin(): string | undefined {
+  if (!process.env.VITE_DEV_SERVER_URL) {
+    return undefined
+  }
+
+  try {
+    return new URL(process.env.VITE_DEV_SERVER_URL).origin
+  } catch {
+    return undefined
+  }
+}
+
+function attachNavigationGuards(window: BrowserWindow, isAllowedUrl: (url: string) => boolean): void {
+  window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
+  window.webContents.on('will-navigate', (event, navigationUrl) => {
+    if (isAllowedUrl(navigationUrl)) {
+      return
+    }
+
+    event.preventDefault()
+  })
 }
 
 function withRuntimeDebugLogging(settings: EventPipeSettings): EventPipeSettings {
@@ -105,7 +122,12 @@ function createSplashWindow(): void {
     },
   })
 
-  const resolvedSplashHtml = splashHtml.replace('__SPLASH_ICON_SRC__', resolveSplashIconDataUrl())
+  attachNavigationGuards(splashWindow, (url) => url.startsWith('data:text/html'))
+
+  const resolvedSplashHtml = splashHtml
+    .replace('__SPLASH_STYLE__', splashStyle)
+    .replace('__SPLASH_ICON_SRC__', resolveSplashIconDataUrl())
+    .replace('__APP_VERSION__', app.getVersion())
   splashWindow.loadURL(`data:text/html;charset=UTF-8,${encodeURIComponent(resolvedSplashHtml)}`)
   splashWindow.once('ready-to-show', () => {
     splashShownAt = Date.now()
@@ -122,10 +144,10 @@ function openSettingsWindow(): void {
   const parent = mainWindow && !mainWindow.isDestroyed() && mainWindow.isVisible() ? mainWindow : undefined
 
   settingsWindow = new BrowserWindow({
-    width: 900,
-    height: 650,
+    width: 780,
+    height: 400,
     minWidth: 780,
-    minHeight: 560,
+    minHeight: 400,
     resizable: true,
     title: 'Konfiguration',
     parent,
@@ -140,13 +162,92 @@ function openSettingsWindow(): void {
     },
   })
 
+  attachNavigationGuards(settingsWindow, (url) => url.startsWith('data:text/html'))
+
   settingsWindow.setMenu(null)
-  settingsWindow.loadURL(`data:text/html;charset=UTF-8,${encodeURIComponent(settingsHtml)}`)
+  const resolvedSettingsHtml = settingsHtml
+    .replace('__SETTINGS_STYLE__', settingsStyle)
+    .replace('__SETTINGS_SCRIPT__', settingsScript)
+  settingsWindow.loadURL(`data:text/html;charset=UTF-8,${encodeURIComponent(resolvedSettingsHtml)}`)
   settingsWindow.once('ready-to-show', () => {
     settingsWindow?.show()
   })
   settingsWindow.on('closed', () => {
     settingsWindow = null
+  })
+}
+
+function openWorkflowWindow(payload?: { mxfPath?: string; wavPath?: string }): void {
+  const existingWorkflowWindow = workflowWindow
+  if (
+    existingWorkflowWindow &&
+    !existingWorkflowWindow.isDestroyed() &&
+    !existingWorkflowWindow.webContents.isDestroyed()
+  ) {
+    if (payload) {
+      workflowStartPayloadByWebContentsId.set(existingWorkflowWindow.webContents.id, payload)
+    }
+
+    existingWorkflowWindow.focus()
+    return
+  }
+
+  const parent = mainWindow && !mainWindow.isDestroyed() && mainWindow.isVisible() ? mainWindow : undefined
+
+  workflowWindow = new BrowserWindow({
+    width: 900,
+    height: 650,
+    minWidth: 780,
+    minHeight: 560,
+    resizable: true,
+    title: 'Exportdialog',
+    parent,
+    modal: Boolean(parent),
+    show: false,
+    backgroundColor: '#f5f5f7',
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.js'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: false,
+    },
+  })
+
+  const devOrigin = getDevServerOrigin()
+  attachNavigationGuards(workflowWindow, (url) => {
+    if (devOrigin) {
+      return url.startsWith(devOrigin)
+    }
+
+    return url.startsWith('file://')
+  })
+
+  if (payload) {
+    workflowStartPayloadByWebContentsId.set(workflowWindow.webContents.id, payload)
+  }
+
+  const workflowWebContentsId = workflowWindow.webContents.id
+
+  workflowWindow.setMenu(null)
+
+  if (process.env.VITE_DEV_SERVER_URL) {
+    const dialogUrl = new URL(process.env.VITE_DEV_SERVER_URL)
+    dialogUrl.searchParams.set('window', 'workflow')
+    workflowWindow.loadURL(dialogUrl.toString())
+  } else {
+    workflowWindow.loadFile(path.join(__dirname, '../index.html'), {
+      query: { window: 'workflow' },
+    })
+  }
+
+  workflowWindow.once('ready-to-show', () => {
+    workflowWindow?.show()
+  })
+
+  workflowWindow.on('closed', () => {
+    workflowStartPayloadByWebContentsId.delete(workflowWebContentsId)
+
+    workflowWindow = null
   })
 }
 
@@ -225,10 +326,12 @@ function createApplicationMenu(): void {
 
 function createMainWindow(): void {
   mainWindow = new BrowserWindow({
-    width: 500,
-    height: 500,
-    minWidth: 320,
-    minHeight: 320,
+    width: 320,
+    height: 320,
+    useContentSize: true,
+    resizable: false,
+    maximizable: false,
+    fullscreenable: false,
     show: false,
     backgroundColor: '#f5f5f7',
     webPreferences: {
@@ -239,13 +342,20 @@ function createMainWindow(): void {
     },
   })
 
+  const devOrigin = getDevServerOrigin()
+  attachNavigationGuards(mainWindow, (url) => {
+    if (devOrigin) {
+      return url.startsWith(devOrigin)
+    }
+
+    return url.startsWith('file://')
+  })
+
   if (process.env.VITE_DEV_SERVER_URL) {
     mainWindow.loadURL(process.env.VITE_DEV_SERVER_URL)
   } else {
     mainWindow.loadFile(path.join(__dirname, '../index.html'))
   }
-
-  mainWindow.setAspectRatio(1)
 
   mainWindow.webContents.once('did-finish-load', async () => {
     // Prevent fast startup flicker by enforcing a minimal splash display time.
@@ -277,147 +387,41 @@ app.whenReady().then(() => {
     createSplashWindow()
     createApplicationMenu()
 
-    ipcMain.handle('eventpipe:get-settings', () => {
-      return {
-        settings: activeSettings,
-        configPath: activeConfigPath,
-      }
-    })
+    registerIpcHandlers({
+      getActiveSettings: () => activeSettings,
+      setActiveSettings: (settings) => {
+        activeSettings = settings
+      },
+      getActiveConfigPath: () => activeConfigPath,
+      getActiveHistoryPath: () => activeHistoryPath,
+      openWorkflowWindow,
+      workflowStartPayloadByWebContentsId,
+      getDialogOwnerWindow: () =>
+        settingsWindow && !settingsWindow.isDestroyed() ? settingsWindow : mainWindow ?? undefined,
+      debugLog,
+      withRuntimeDebugLogging,
+      isTrustedRenderer: (webContentsId, frameUrl) => {
+        const trustedIds = [
+          mainWindow?.webContents.id,
+          workflowWindow?.webContents.id,
+          settingsWindow?.webContents.id,
+        ].filter((id): id is number => typeof id === 'number')
 
-    ipcMain.handle('eventpipe:get-export-history', async (_event, limit?: number) => {
-      const safeLimit = Math.max(1, Math.min(100, typeof limit === 'number' ? Math.floor(limit) : 20))
-      return readExportHistory(activeHistoryPath, safeLimit)
-    })
-
-    ipcMain.handle('eventpipe:pick-directory', async (_event, initialPath?: string) => {
-      const ownerWindow = settingsWindow && !settingsWindow.isDestroyed() ? settingsWindow : mainWindow ?? undefined
-      const dialogOptions: OpenDialogOptions = {
-        title: 'Ordner auswählen',
-        properties: ['openDirectory', 'createDirectory', 'promptToCreate'],
-        defaultPath: initialPath?.trim() || undefined,
-      }
-
-      const result = ownerWindow
-        ? await dialog.showOpenDialog(ownerWindow, dialogOptions)
-        : await dialog.showOpenDialog(dialogOptions)
-
-      if (result.canceled || result.filePaths.length === 0) {
-        return undefined
-      }
-
-      return result.filePaths[0]
-    })
-
-    ipcMain.handle('eventpipe:save-settings', async (_event, input: Partial<EventPipeSettings>) => {
-      const merged = {
-        ...activeSettings,
-        ...input,
-      }
-
-      const saved = await saveSettings(activeConfigPath, merged)
-      activeSettings = withRuntimeDebugLogging(saved)
-      debugLog('Settings saved', { configPath: activeConfigPath })
-
-      return {
-        settings: activeSettings,
-        configPath: activeConfigPath,
-      }
-    })
-
-    ipcMain.handle('eventpipe:analyze-mxf', async (_event, mxfPath: string): Promise<AnalyzeMxfResult> => {
-      debugLog('Analyze MXF requested', { mxfPath })
-      const probe = await analyzeMxfWithFfprobe(mxfPath, activeSettings.ffprobePath)
-      return { probe }
-    })
-
-    ipcMain.handle('eventpipe:analyze-wav', async (_event, wavPath: string): Promise<AnalyzeWavResult> => {
-      debugLog('Analyze WAV requested', { wavPath })
-      const probe = await analyzeWavWithFfprobe(wavPath, activeSettings.ffprobePath)
-      const classification = classifyWav(probe)
-
-      if (!isSupportedChannelCount(probe.channels)) {
-        throw new Error(`Unsupported channel count ${probe.channels}. Allowed: 2, 4, 6, 8.`)
-      }
-
-      const mapping =
-        classification.type === 'legacy-surround-print'
-          ? buildLegacyMapping(probe.channels)
-          : buildBounceMapping(probe.channels, classification.trackNames)
-
-      return {
-        probe,
-        classification,
-        mapping,
-      }
-    })
-
-    ipcMain.handle('eventpipe:export-job', async (event, request: ExportJobRequest): Promise<ExportJobResult> => {
-      if (!request.mxfPath || !request.wavPath || request.mapping.length === 0) {
-        throw new Error('Export request is incomplete.')
-      }
-
-      debugLog('Export requested', {
-        mxfPath: request.mxfPath,
-        wavPath: request.wavPath,
-        mappingEntries: request.mapping.length,
-      })
-
-      event.sender.send('eventpipe:export-progress', {
-        percent: 0,
-      })
-
-      try {
-        const result = await exportMxfWithMappedAudio(request, activeSettings, (update) => {
-          event.sender.send('eventpipe:export-progress', update)
-        })
-
-        const successEntry: ExportHistoryEntry = {
-          id: `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
-          timestamp: new Date().toISOString(),
-          status: 'success',
-          mxfPath: request.mxfPath,
-          wavPath: request.wavPath,
-          outputPath: result.outputPath,
-          tempOutputPath: result.tempOutputPath,
-          publishedPath: result.publishedPath,
-          publishConflictResolved: result.publishConflictResolved,
-          logPath: result.logPath,
-          detectedWavType: request.metadata?.detectedWavType,
-          selectedWavType: request.metadata?.selectedWavType,
-          manualSelectionApplied: request.metadata?.manualSelectionApplied,
-          classificationReason: request.metadata?.classificationReason,
-          mappingCount: request.mapping.length,
+        if (!trustedIds.includes(webContentsId)) {
+          return false
         }
 
-        await appendExportHistory(activeHistoryPath, successEntry)
-
-        event.sender.send('eventpipe:export-progress', {
-          percent: 100,
-        })
-
-        return result
-      } catch (exportError) {
-        const message = exportError instanceof Error ? exportError.message : String(exportError)
-        const logPathMatch = message.match(/Export failed\. Log: (.+)\n/)
-
-        const errorEntry: ExportHistoryEntry = {
-          id: `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
-          timestamp: new Date().toISOString(),
-          status: 'error',
-          mxfPath: request.mxfPath,
-          wavPath: request.wavPath,
-          logPath: logPathMatch?.[1]?.trim(),
-          errorMessage: message,
-          detectedWavType: request.metadata?.detectedWavType,
-          selectedWavType: request.metadata?.selectedWavType,
-          manualSelectionApplied: request.metadata?.manualSelectionApplied,
-          classificationReason: request.metadata?.classificationReason,
-          mappingCount: request.mapping.length,
+        const devOrigin = getDevServerOrigin()
+        if (devOrigin && frameUrl.startsWith(devOrigin)) {
+          return true
         }
 
-        await appendExportHistory(activeHistoryPath, errorEntry)
-        throw exportError
-      }
+        if (frameUrl.startsWith('file://') || frameUrl.startsWith('data:text/html')) {
+          return true
+        }
+
+        return false
+      },
     })
 
     createMainWindow()
@@ -443,7 +447,5 @@ app.whenReady().then(() => {
 })
 
 app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') {
-    app.quit()
-  }
+  app.quit()
 })

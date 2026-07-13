@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import { mdiFilmstrip, mdiWaveform } from '@mdi/js'
 
 const props = defineProps<{
   mxfPath?: string
@@ -35,8 +36,10 @@ function handleDrop(event: DragEvent): void {
   let mxfPath: string | undefined
   let wavPath: string | undefined
 
+  // We only care about first MXF and first WAV from the drop payload.
   for (const file of files) {
     const extension = file.name.split('.').pop()?.toLowerCase()
+    // Prefer absolute filesystem paths via preload bridge; fallback keeps dev browser mode usable.
     const filePath =
       (typeof window !== 'undefined' && window.eventPipe ? window.eventPipe.getPathForFile(file) : '') ||
       (file as File & { path?: string }).path ||
@@ -67,31 +70,35 @@ function handleDrop(event: DragEvent): void {
     @dragleave="handleDragLeave"
     @drop="handleDrop"
   >
-    <button v-if="showClear" type="button" class="dropzone-clear-x" aria-label="Leeren" @click.stop="emit('clear')">
-      <span aria-hidden="true">×</span>
-    </button>
+    <div class="drop-card" aria-label="Drop area status">
+      <button v-if="showClear" type="button" class="dropzone-clear-x" aria-label="Leeren" @click.stop="emit('clear')">
+        <span aria-hidden="true">×</span>
+      </button>
 
-    <div class="drop-icons" aria-label="Drop area status">
-      <div class="media-icon" :class="{ 'media-icon--active': !!mxfPath }" aria-label="MXF status">
-        <svg viewBox="0 0 80 80" role="img" aria-hidden="true">
-          <path class="doc-shell" d="M20 10h28l12 12v46H20z" />
-          <path class="doc-fold" d="M48 10v12h12" />
-          <rect class="filmstrip" x="27" y="30" width="26" height="20" rx="3" ry="3" />
-          <circle class="film-hole" cx="30" cy="35" r="1.8" />
-          <circle class="film-hole" cx="30" cy="45" r="1.8" />
-          <circle class="film-hole" cx="50" cy="35" r="1.8" />
-          <circle class="film-hole" cx="50" cy="45" r="1.8" />
-        </svg>
-        <span v-if="mxfPath" class="checkmark" aria-hidden="true">✓</span>
-      </div>
+      <div class="drop-halves">
+        <div class="drop-half" :class="{ 'drop-half--active': !!mxfPath }" aria-label="MXF status">
+          <div class="drop-icon">
+            <svg viewBox="0 0 80 80" role="img" aria-hidden="true">
+              <path class="doc-shell" d="M20 10h28l12 12v46H20z" />
+              <path class="doc-fold" d="M48 10v12h12" />
+              <path class="mdi-glyph" :d="mdiFilmstrip" transform="translate(25 25) scale(1.3)" />
+            </svg>
+            <span v-if="mxfPath" class="checkmark" aria-hidden="true">✓</span>
+          </div>
+        </div>
 
-      <div class="media-icon" :class="{ 'media-icon--active': !!wavPath }" aria-label="WAV status">
-        <svg viewBox="0 0 80 80" role="img" aria-hidden="true">
-          <path class="doc-shell" d="M20 10h28l12 12v46H20z" />
-          <path class="doc-fold" d="M48 10v12h12" />
-          <path class="wave-line" d="M27 42h5l3-9 5 17 5-22 3 14h5" />
-        </svg>
-        <span v-if="wavPath" class="checkmark" aria-hidden="true">✓</span>
+        <div class="drop-divider" aria-hidden="true"></div>
+
+        <div class="drop-half" :class="{ 'drop-half--active': !!wavPath }" aria-label="WAV status">
+          <div class="drop-icon">
+            <svg viewBox="0 0 80 80" role="img" aria-hidden="true">
+              <path class="doc-shell" d="M20 10h28l12 12v46H20z" />
+              <path class="doc-fold" d="M48 10v12h12" />
+              <path class="mdi-glyph" :d="mdiWaveform" transform="translate(23 23) scale(1.5)" />
+            </svg>
+            <span v-if="wavPath" class="checkmark" aria-hidden="true">✓</span>
+          </div>
+        </div>
       </div>
     </div>
   </section>

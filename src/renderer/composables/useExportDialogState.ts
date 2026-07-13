@@ -1,9 +1,8 @@
 import { computed, onBeforeUnmount, ref } from 'vue'
 
-import type { ExportHistoryEntry } from '../../shared/types'
 import type { UseExportDialogStateOptions } from './types'
 
-export type CopyState = 'idle' | 'copied' | 'error'
+export type OpenState = 'idle' | 'error'
 
 export function useExportDialogState(options: UseExportDialogStateOptions) {
   const { isExporting, error, bridgeAvailable } = options
@@ -12,11 +11,10 @@ export function useExportDialogState(options: UseExportDialogStateOptions) {
   const exportProgressPercent = ref<number>()
   const exportProgressDetails = ref<string>()
   const exportLogPath = ref<string>()
-  const exportDetails = ref<string>()
-  const copyLogStatus = ref<CopyState>('idle')
-  const copyDetailsStatus = ref<CopyState>('idle')
-  const recentExportHistory = ref<ExportHistoryEntry[]>([])
+  const exportDurationLabel = ref<string>()
+  const logOpenStatus = ref<OpenState>('idle')
 
+  // Title reflects current phase/outcome and is reused by the result dialog component.
   const exportDialogTitle = computed(() => {
     if (isExporting.value) {
       return 'Export läuft'
@@ -26,45 +24,33 @@ export function useExportDialogState(options: UseExportDialogStateOptions) {
   })
 
   function resetForNewExport(): void {
+    // Keep historical list, but clear all per-run UI artifacts.
     error.value = undefined
     exportMessage.value = undefined
     exportProgressPercent.value = undefined
     exportProgressDetails.value = 'Starting ffmpeg...'
     exportLogPath.value = undefined
-    exportDetails.value = undefined
-    copyLogStatus.value = 'idle'
-    copyDetailsStatus.value = 'idle'
+    exportDurationLabel.value = undefined
+    logOpenStatus.value = 'idle'
   }
 
-  async function copyLogPath(): Promise<void> {
-    if (!exportLogPath.value) {
+  async function openExportLog(): Promise<void> {
+    if (!bridgeAvailable || !exportLogPath.value) {
       return
     }
 
     try {
-      await navigator.clipboard.writeText(exportLogPath.value)
-      copyLogStatus.value = 'copied'
+      const opened = await window.eventPipe.openPath(exportLogPath.value)
+      logOpenStatus.value = opened ? 'idle' : 'error'
     } catch {
-      copyLogStatus.value = 'error'
-    }
-  }
-
-  async function copyExportDetails(): Promise<void> {
-    if (!exportDetails.value) {
-      return
-    }
-
-    try {
-      await navigator.clipboard.writeText(exportDetails.value)
-      copyDetailsStatus.value = 'copied'
-    } catch {
-      copyDetailsStatus.value = 'error'
+      logOpenStatus.value = 'error'
     }
   }
 
   const unsubscribeExportProgress =
     bridgeAvailable && window.eventPipe.onExportProgress
       ? window.eventPipe.onExportProgress((update) => {
+          // Backend sends partial progress events; we normalize for compact UI display.
           if (typeof update.percent === 'number') {
             exportProgressPercent.value = update.percent
           }
@@ -85,17 +71,14 @@ export function useExportDialogState(options: UseExportDialogStateOptions) {
   })
 
   return {
-    copyDetailsStatus,
-    copyExportDetails,
-    copyLogPath,
-    copyLogStatus,
-    exportDetails,
     exportDialogTitle,
+    exportDurationLabel,
     exportLogPath,
     exportMessage,
+    logOpenStatus,
+    openExportLog,
     exportProgressDetails,
     exportProgressPercent,
-    recentExportHistory,
     resetForNewExport,
   }
 }

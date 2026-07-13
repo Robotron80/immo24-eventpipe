@@ -1,11 +1,56 @@
-import e from "node:path";
-import t, { existsSync as n } from "node:fs";
-import { fileURLToPath as r } from "node:url";
-import { BrowserWindow as i, Menu as a, app as o, dialog as s, ipcMain as c } from "electron";
-import { spawn as l } from "node:child_process";
-import u from "node:fs/promises";
+import path from "node:path";
+import fs, { existsSync } from "node:fs";
+import { fileURLToPath } from "node:url";
+import { BrowserWindow, Menu, app, dialog, ipcMain, shell } from "electron";
+import fs$1 from "node:fs/promises";
+import { spawn } from "node:child_process";
 //#region src/main/settings.html?raw
-var d = "<!doctype html>\n<html>\n  <head>\n    <meta charset=\"UTF-8\" />\n    <style>\n      :root {\n        font-family: -apple-system, BlinkMacSystemFont, \"SF Pro Text\", \"Helvetica Neue\", sans-serif;\n        color: #1f2328;\n      }\n\n      * {\n        box-sizing: border-box;\n      }\n\n      body {\n        margin: 0;\n        background: #f6f7f9;\n        height: 100vh;\n        overflow: hidden;\n      }\n\n      .settings-root {\n        height: 100vh;\n        display: flex;\n        flex-direction: column;\n      }\n\n      .content-scroll {\n        flex: 1;\n        overflow: auto;\n        padding: 16px;\n      }\n\n      .section {\n        max-width: 760px;\n        margin: 0 auto;\n        background: #ffffff;\n        border: 1px solid #e1e4e9;\n        border-radius: 12px;\n        padding: 16px;\n        display: grid;\n        gap: 12px;\n      }\n\n      h1 {\n        margin: 0;\n        font-size: 20px;\n      }\n\n      p {\n        margin: 0;\n        color: #626b75;\n        font-size: 13px;\n      }\n\n      label {\n        display: grid;\n        gap: 6px;\n        font-size: 13px;\n      }\n\n      input {\n        border: 1px solid #c8ccd2;\n        border-radius: 8px;\n        background: #ffffff;\n        color: #1f2328;\n        padding: 8px 10px;\n      }\n\n      .path-row {\n        display: grid;\n        grid-template-columns: 1fr auto;\n        gap: 8px;\n      }\n\n      .path-row button {\n        min-width: 84px;\n      }\n\n      .actions-sticky {\n        position: sticky;\n        bottom: 0;\n        background: #ffffff;\n        border-top: 1px solid #e3e6ea;\n        padding: 12px 16px;\n        display: flex;\n        justify-content: space-between;\n        gap: 8px;\n      }\n\n      button {\n        border-radius: 8px;\n        border: 1px solid #c8ccd2;\n        background: #ffffff;\n        color: #27303a;\n        padding: 8px 12px;\n        font-size: 13px;\n      }\n\n      .primary {\n        border-color: #2f6fda;\n        background: #2f6fda;\n        color: #ffffff;\n        font-weight: 600;\n      }\n    </style>\n  </head>\n  <body>\n    <div class=\"settings-root\">\n      <main class=\"content-scroll\">\n        <section class=\"section\">\n          <h1>Konfiguration</h1>\n          <label>\n            Watchfolder\n            <div class=\"path-row\">\n              <input id=\"watchFolder\" placeholder=\"/path/to/watchfolder\" />\n              <button id=\"browseWatchFolder\" type=\"button\">Durchsuchen...</button>\n            </div>\n          </label>\n\n          <label>\n            Temporärer Exportordner\n            <div class=\"path-row\">\n              <input id=\"tempExportFolder\" placeholder=\"/path/to/temp\" />\n              <button id=\"browseTempFolder\" type=\"button\">Durchsuchen...</button>\n            </div>\n          </label>\n\n          <label>\n            Namensschema\n            <input id=\"namingPreset\" placeholder=\"{sourceName}\" />\n          </label>\n\n        </section>\n      </main>\n\n      <footer class=\"actions-sticky\">\n        <button id=\"cancelButton\" type=\"button\">Abbrechen</button>\n        <button id=\"saveButton\" type=\"button\" class=\"primary\">Speichern</button>\n      </footer>\n    </div>\n\n    <script>\n      const watchFolderInput = document.getElementById('watchFolder')\n      const tempExportFolderInput = document.getElementById('tempExportFolder')\n      const browseWatchFolderButton = document.getElementById('browseWatchFolder')\n      const browseTempFolderButton = document.getElementById('browseTempFolder')\n      const namingPresetInput = document.getElementById('namingPreset')\n      const saveButton = document.getElementById('saveButton')\n      const cancelButton = document.getElementById('cancelButton')\n\n      function readFormSettings() {\n        return {\n          watchFolder: watchFolderInput.value,\n          tempExportFolder: tempExportFolderInput.value,\n          namingPreset: namingPresetInput.value,\n        }\n      }\n\n      function applyFormSettings(settings) {\n        watchFolderInput.value = settings.watchFolder ?? ''\n        tempExportFolderInput.value = settings.tempExportFolder ?? ''\n        namingPresetInput.value = settings.namingPreset ?? '{sourceName}'\n      }\n\n      async function browseInto(inputElement) {\n        try {\n          const selectedPath = await window.eventPipe.pickDirectory(inputElement.value)\n          if (selectedPath) {\n            inputElement.value = selectedPath\n          }\n        } catch (error) {\n          window.alert(error instanceof Error ? error.message : 'Ordnerauswahl fehlgeschlagen.')\n        }\n      }\n\n      async function loadSettings() {\n        try {\n          const snapshot = await window.eventPipe.getSettings()\n          applyFormSettings(snapshot.settings)\n        } catch (error) {\n          window.alert(error instanceof Error ? error.message : 'Konfiguration konnte nicht geladen werden.')\n        }\n      }\n\n      async function saveSettings() {\n        saveButton.disabled = true\n\n        try {\n          const snapshot = await window.eventPipe.saveSettings(readFormSettings())\n          applyFormSettings(snapshot.settings)\n          window.close()\n        } catch (error) {\n          window.alert(error instanceof Error ? error.message : 'Konfiguration konnte nicht gespeichert werden.')\n        } finally {\n          saveButton.disabled = false\n        }\n      }\n\n      saveButton.addEventListener('click', () => {\n        void saveSettings()\n      })\n\n      cancelButton.addEventListener('click', () => {\n        window.close()\n      })\n\n      browseWatchFolderButton.addEventListener('click', () => {\n        void browseInto(watchFolderInput)\n      })\n\n      browseTempFolderButton.addEventListener('click', () => {\n        void browseInto(tempExportFolderInput)\n      })\n\n      void loadSettings()\n    <\/script>\n  </body>\n</html>\n", f = "<!doctype html>\n<html>\n  <head>\n    <meta charset=\"UTF-8\" />\n    <style>\n      body {\n        margin: 0;\n        font-family: -apple-system, BlinkMacSystemFont, \"SF Pro Text\", \"Helvetica Neue\", sans-serif;\n        background: transparent;\n      }\n\n      .card {\n        width: 100vw;\n        height: 100vh;\n        display: grid;\n        place-items: center;\n        background: rgba(255, 255, 255, 0.96);\n        border-radius: 16px;\n        border: 1px solid rgba(0, 0, 0, 0.08);\n        color: #1f1f1f;\n        box-shadow: 0 22px 60px rgba(0, 0, 0, 0.2);\n      }\n\n      .inner {\n        text-align: center;\n        display: grid;\n        gap: 10px;\n      }\n\n      .pinwheel {\n        width: 52px;\n        height: 52px;\n        margin: 0 auto 8px;\n        animation: spin 4s linear infinite;\n        object-fit: contain;\n        display: block;\n      }\n\n      p {\n        margin: 0;\n        color: #6f7680;\n      }\n\n      h1 {\n        margin: 0;\n        font-size: 24px;\n        font-weight: 600;\n      }\n\n      @keyframes spin {\n        to {\n          transform: rotate(360deg);\n        }\n      }\n    </style>\n  </head>\n  <body>\n    <div class=\"card\">\n      <div class=\"inner\">\n        <img class=\"pinwheel\" src=\"__SPLASH_ICON_SRC__\" alt=\"\" aria-hidden=\"true\" />\n        <p>Ja, aber...</p>\n        <h1>immo24 EventPipe</h1>\n      </div>\n    </div>\n  </body>\n</html>\n", p = {
+var settings_default$2 = "<!doctype html>\n<html>\n  <head>\n    <meta charset=\"UTF-8\" />\n    <style>\n      __SETTINGS_STYLE__\n    </style>\n  </head>\n  <body>\n    <div class=\"settings-root\">\n      <header class=\"settings-header\">\n        <h1>Konfiguration</h1>\n      </header>\n\n      <main class=\"content-scroll\">\n        <section class=\"settings-content\">\n          <label>\n            Watchfolder\n            <div class=\"path-row\">\n              <input id=\"watchFolder\" placeholder=\"/path/to/watchfolder\" />\n              <button id=\"browseWatchFolder\" type=\"button\">Durchsuchen...</button>\n            </div>\n          </label>\n\n          <label>\n            Temporärer Exportordner\n            <div class=\"path-row\">\n              <input id=\"tempExportFolder\" placeholder=\"/path/to/temp\" />\n              <button id=\"browseTempFolder\" type=\"button\">Durchsuchen...</button>\n            </div>\n          </label>\n\n        </section>\n      </main>\n\n      <footer class=\"actions-sticky\">\n        <button id=\"cancelButton\" type=\"button\">Abbrechen</button>\n        <button id=\"saveButton\" type=\"button\" class=\"primary\">Speichern</button>\n      </footer>\n    </div>\n\n    <script>\n      __SETTINGS_SCRIPT__\n    <\/script>\n  </body>\n</html>\n";
+//#endregion
+//#region src/main/settings.js?raw
+var settings_default$1 = "const watchFolderInput = document.getElementById('watchFolder')\nconst tempExportFolderInput = document.getElementById('tempExportFolder')\nconst browseWatchFolderButton = document.getElementById('browseWatchFolder')\nconst browseTempFolderButton = document.getElementById('browseTempFolder')\nconst saveButton = document.getElementById('saveButton')\nconst cancelButton = document.getElementById('cancelButton')\n\nfunction readFormSettings() {\n  return {\n    watchFolder: watchFolderInput.value,\n    tempExportFolder: tempExportFolderInput.value,\n  }\n}\n\nfunction applyFormSettings(settings) {\n  watchFolderInput.value = settings.watchFolder ?? ''\n  tempExportFolderInput.value = settings.tempExportFolder ?? ''\n}\n\nasync function browseInto(inputElement) {\n  try {\n    const selectedPath = await window.eventPipe.pickDirectory(inputElement.value)\n    if (selectedPath) {\n      inputElement.value = selectedPath\n    }\n  } catch (error) {\n    window.alert(error instanceof Error ? error.message : 'Ordnerauswahl fehlgeschlagen.')\n  }\n}\n\nasync function loadSettings() {\n  try {\n    const snapshot = await window.eventPipe.getSettings()\n    applyFormSettings(snapshot.settings)\n  } catch (error) {\n    window.alert(error instanceof Error ? error.message : 'Konfiguration konnte nicht geladen werden.')\n  }\n}\n\nasync function saveSettings() {\n  saveButton.disabled = true\n  let shouldClose = false\n\n  try {\n    const snapshot = await window.eventPipe.saveSettings(readFormSettings())\n    applyFormSettings(snapshot.settings)\n    shouldClose = true\n  } catch (error) {\n    window.alert(error instanceof Error ? error.message : 'Konfiguration konnte nicht gespeichert werden.')\n  } finally {\n    if (shouldClose) {\n      queueMicrotask(() => window.close())\n      return\n    }\n\n    saveButton.disabled = false\n  }\n}\n\nsaveButton.addEventListener('click', () => {\n  void saveSettings()\n})\n\ncancelButton.addEventListener('click', () => {\n  window.close()\n})\n\nbrowseWatchFolderButton.addEventListener('click', () => {\n  void browseInto(watchFolderInput)\n})\n\nbrowseTempFolderButton.addEventListener('click', () => {\n  void browseInto(tempExportFolderInput)\n})\n\ndocument.addEventListener('keydown', (event) => {\n  if (event.key === 'Escape') {\n    event.preventDefault()\n    window.close()\n    return\n  }\n\n  if (event.key === 'Enter' && event.target instanceof HTMLInputElement) {\n    event.preventDefault()\n    void saveSettings()\n  }\n})\n\nwatchFolderInput.focus()\n\nvoid loadSettings()\n";
+//#endregion
+//#region src/main/settings.css?raw
+var settings_default = ":root {\n  font-family: -apple-system, BlinkMacSystemFont, \"SF Pro Text\", \"Helvetica Neue\", sans-serif;\n  color: #1f2328;\n}\n\n* {\n  box-sizing: border-box;\n}\n\nbody {\n  margin: 0;\n  background: #f3f5f8;\n  height: 100vh;\n  overflow: hidden;\n}\n\n.settings-root {\n  height: 100vh;\n  display: grid;\n  grid-template-rows: auto 1fr auto;\n  background: #f3f5f8;\n}\n\n.settings-header {\n  padding: 18px 22px 10px;\n  background: #f3f5f8;\n}\n\n.settings-header h1 {\n  margin: 0;\n  font-size: 20px;\n  font-weight: 600;\n  line-height: 1.2;\n  letter-spacing: -0.01em;\n  color: #20252b;\n}\n\n.settings-header p {\n  margin: 6px 0 0;\n  color: #5a6270;\n  font-size: 13px;\n}\n\n.content-scroll {\n  overflow: auto;\n  padding: 12px 22px;\n}\n\n.settings-content {\n  margin: 0;\n  background: #ffffff;\n  border: 1px solid #dbe2e9;\n  border-radius: 10px;\n  padding: 12px;\n  display: grid;\n  gap: 12px;\n}\n\nlabel {\n  display: grid;\n  gap: 6px;\n  font-size: 11px;\n  font-weight: 700;\n  letter-spacing: 0.02em;\n  text-transform: uppercase;\n  color: #616b79;\n}\n\ninput {\n  border: 1px solid #c8ccd2;\n  border-radius: 8px;\n  background: #ffffff;\n  color: #1f2328;\n  padding: 9px 10px;\n  font-size: 13px;\n}\n\ninput:focus {\n  outline: none;\n  border-color: #2f6fda;\n  box-shadow: 0 0 0 3px rgba(47, 111, 218, 0.1);\n}\n\n.path-row {\n  display: grid;\n  grid-template-columns: 1fr auto;\n  gap: 8px;\n}\n\n.path-row button {\n  min-width: 84px;\n}\n\n.actions-sticky {\n  background: #f3f5f8;\n  padding: 12px 22px;\n  display: flex;\n  justify-content: flex-end;\n  align-items: center;\n  gap: 10px;\n}\n\nbutton {\n  border-radius: 9px;\n  border: 1px solid #c8ccd2;\n  background: #ffffff;\n  color: #22272e;\n  padding: 9px 14px;\n  font-size: 13px;\n  cursor: pointer;\n  transition: transform 100ms ease, box-shadow 140ms ease, background-color 140ms ease, border-color 140ms ease;\n  box-shadow: 0 1px 1px rgba(15, 23, 42, 0.06);\n}\n\n.primary {\n  border-color: #2f6fda;\n  background: #2f6fda;\n  color: #ffffff;\n  font-weight: 600;\n  box-shadow: 0 1px 1px rgba(24, 69, 148, 0.18);\n}\n\nbutton:disabled {\n  opacity: 1;\n  color: #8a93a2;\n  background: #edf1f5;\n  border-color: #d2d9e2;\n  box-shadow: none;\n  cursor: not-allowed;\n}\n\nbutton.primary:disabled {\n  color: #dfe8f8;\n  background: #8aa9dd;\n  border-color: #8aa9dd;\n}\n\nbutton:not(:disabled):hover {\n  transform: translateY(-0.5px);\n  border-color: #b7c0cb;\n  background: #f9fafc;\n  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.1);\n}\n\nbutton.primary:not(:disabled):hover {\n  border-color: #2d6ace;\n  background: #2d6ace;\n  box-shadow: 0 2px 8px rgba(30, 82, 171, 0.22);\n}\n\nbutton:not(:disabled):active {\n  transform: translateY(0);\n  background: #edf1f5;\n  border-color: #aeb8c4;\n  box-shadow: inset 0 1px 2px rgba(15, 23, 42, 0.14);\n}\n\nbutton.primary:not(:disabled):active {\n  background: #275eba;\n  border-color: #275eba;\n  box-shadow: inset 0 1px 2px rgba(16, 46, 95, 0.24);\n}\n\nbutton:focus-visible {\n  outline: none;\n  box-shadow: 0 0 0 3px rgba(47, 111, 218, 0.2);\n}\n\ninput:focus-visible {\n  outline: none;\n  border-color: #2f6fda;\n  box-shadow: 0 0 0 3px rgba(47, 111, 218, 0.12);\n}\n\n@media (prefers-reduced-motion: reduce) {\n  button {\n    transition: none !important;\n  }\n}\n\n@media (max-width: 900px) {\n  .settings-header,\n  .content-scroll,\n  .actions-sticky {\n    padding-left: 14px;\n    padding-right: 14px;\n  }\n}\n";
+//#endregion
+//#region src/main/splash.html?raw
+var splash_default$1 = "<!doctype html>\n<html>\n  <head>\n    <meta charset=\"UTF-8\" />\n    <style>\n      __SPLASH_STYLE__\n    </style>\n  </head>\n  <body>\n    <div class=\"card\">\n      <div class=\"inner\">\n        <img class=\"pinwheel\" src=\"__SPLASH_ICON_SRC__\" alt=\"\" aria-hidden=\"true\" />\n        <p>Ja, aber...</p>\n        <h1>immo24 EventPipe</h1>\n      </div>\n      <p class=\"version\">v__APP_VERSION__</p>\n    </div>\n  </body>\n</html>\n";
+//#endregion
+//#region src/main/splash.css?raw
+var splash_default = "body {\n  margin: 0;\n  font-family: -apple-system, BlinkMacSystemFont, \"SF Pro Text\", \"Helvetica Neue\", sans-serif;\n  background: transparent;\n}\n\n.card {\n  width: 100vw;\n  height: 100vh;\n  display: grid;\n  place-items: center;\n  background: rgba(255, 255, 255, 0.96);\n  border-radius: 16px;\n  border: 1px solid rgba(0, 0, 0, 0.08);\n  color: #1f1f1f;\n  box-shadow: 0 22px 60px rgba(0, 0, 0, 0.2);\n}\n\n.inner {\n  text-align: center;\n  display: grid;\n  gap: 10px;\n}\n\n.version {\n  position: absolute;\n  right: 12px;\n  bottom: 10px;\n  margin: 0;\n  font-size: 11px;\n  line-height: 1;\n  color: #a4aab3;\n  letter-spacing: 0.02em;\n}\n\n.pinwheel {\n  width: 120px;\n  height: 120px;\n  margin: 0 auto 8px;\n  animation: spin 4s linear infinite;\n  object-fit: contain;\n  display: block;\n}\n\np {\n  margin: 0;\n  color: #6f7680;\n}\n\nh1 {\n  margin: 0;\n  font-size: 24px;\n  font-weight: 600;\n}\n\n@keyframes spin {\n  to {\n    transform: rotate(360deg);\n  }\n}\n";
+//#endregion
+//#region src/main/historyService.ts
+function getExportHistoryPath(configPath) {
+	return path.join(path.dirname(configPath), "export-history.jsonl");
+}
+async function appendExportHistory(historyPath, entry) {
+	await fs$1.mkdir(path.dirname(historyPath), { recursive: true });
+	await fs$1.appendFile(historyPath, `${JSON.stringify(entry)}\n`, "utf-8");
+}
+async function readExportHistory(historyPath, limit = 20) {
+	try {
+		const lines = (await fs$1.readFile(historyPath, "utf-8")).split("\n").map((line) => line.trim()).filter((line) => line.length > 0);
+		const parsed = [];
+		for (let index = lines.length - 1; index >= 0 && parsed.length < limit; index -= 1) try {
+			parsed.push(JSON.parse(lines[index]));
+		} catch {}
+		return parsed;
+	} catch {
+		return [];
+	}
+}
+//#endregion
+//#region src/main/logService.ts
+function writeLog(entry) {
+	const payload = {
+		ts: (/* @__PURE__ */ new Date()).toISOString(),
+		...entry
+	};
+	console.log(JSON.stringify(payload));
+}
+//#endregion
+//#region src/shared/mapping.ts
+var LEGACY_MAPPING = {
 	2: [1, 2],
 	4: [
 		1,
@@ -31,72 +76,86 @@ var d = "<!doctype html>\n<html>\n  <head>\n    <meta charset=\"UTF-8\" />\n    
 		6,
 		4
 	]
-}, m = [
+};
+var SUPPORTED_CHANNEL_COUNTS = [
 	2,
 	4,
 	6,
 	8
 ];
-function h(e) {
-	return m.includes(e);
+function isSupportedChannelCount(value) {
+	return SUPPORTED_CHANNEL_COUNTS.includes(value);
 }
-function g(e, t = []) {
-	return Array.from({ length: e }, (e, n) => ({
-		mxfTrack: n + 1,
-		wavChannel: n + 1,
-		name: t[n]
+function buildBounceMapping(channels, trackNames = []) {
+	return Array.from({ length: channels }, (_, index) => ({
+		mxfTrack: index + 1,
+		wavChannel: index + 1,
+		name: trackNames[index]
 	}));
 }
-function _(e) {
-	return p[e].map((e, t) => ({
-		mxfTrack: t + 1,
-		wavChannel: e
+function buildLegacyMapping(channels) {
+	return LEGACY_MAPPING[channels].map((wavChannel, index) => ({
+		mxfTrack: index + 1,
+		wavChannel
 	}));
 }
 //#endregion
 //#region src/shared/classifier.ts
-function ee(e) {
-	let t = [];
-	for (let [n, r] of Object.entries(e.streamTags ?? {})) t.push(`${n}=${r}`);
-	for (let [n, r] of Object.entries(e.formatTags ?? {})) t.push(`${n}=${r}`);
-	return t.join(" | ").toLowerCase();
+function normalizeTags$1(probe) {
+	const values = [];
+	for (const [key, value] of Object.entries(probe.streamTags ?? {})) values.push(`${key}=${value}`);
+	for (const [key, value] of Object.entries(probe.formatTags ?? {})) values.push(`${key}=${value}`);
+	return values.join(" | ").toLowerCase();
 }
-function te(e) {
-	let t = (e) => e.trim().replace(/[\s/|,;:-]+$/g, "").trim(), n = (e) => e.replace(/\s*\|\s*[a-z_][a-z0-9_ -]*\s*=.*$/i, "").replace(/\s+[a-z_][a-z0-9_ -]*\s*=.*$/i, "").trim(), r = /* @__PURE__ */ new Map(), i = [...Object.entries(e.streamTags ?? {}), ...Object.entries(e.formatTags ?? {})], a = i.map(([e, t]) => `${e}=${t}`).join(" | "), o = [...a.matchAll(/dTRK\s*(\d+)\s*=/gi)];
-	for (let e = 0; e < o.length; e += 1) {
-		let i = o[e], s = o[e + 1];
-		if (i.index === void 0) continue;
-		let c = i.index + i[0].length, l = s?.index ?? a.length, u = a.slice(c, l), d = Number(i[1]), f = t(n(u));
-		f && r.set(d, f);
+function extractDtrkNames(probe) {
+	const cleanName = (value) => value.trim().replace(/[\s/|,;:-]+$/g, "").trim();
+	const stripMetadataTail = (value) => value.replace(/\s*\|\s*[a-z_][a-z0-9_ -]*\s*=.*$/i, "").replace(/\s+[a-z_][a-z0-9_ -]*\s*=.*$/i, "").trim();
+	const dtrkByIndex = /* @__PURE__ */ new Map();
+	const allTagEntries = [...Object.entries(probe.streamTags ?? {}), ...Object.entries(probe.formatTags ?? {})];
+	const combinedText = allTagEntries.map(([key, value]) => `${key}=${value}`).join(" | ");
+	const tokenMatches = [...combinedText.matchAll(/dTRK\s*(\d+)\s*=/gi)];
+	for (let index = 0; index < tokenMatches.length; index += 1) {
+		const current = tokenMatches[index];
+		const next = tokenMatches[index + 1];
+		if (current.index === void 0) continue;
+		const valueStart = current.index + current[0].length;
+		const valueEnd = next?.index ?? combinedText.length;
+		const rawValue = combinedText.slice(valueStart, valueEnd);
+		const trackIndex = Number(current[1]);
+		const name = cleanName(stripMetadataTail(rawValue));
+		if (name) dtrkByIndex.set(trackIndex, name);
 	}
-	for (let [e, a] of i) {
-		let i = e.match(/^\s*dtrk\s*(\d+)\s*$/i);
-		i && a.trim() && r.set(Number(i[1]), t(n(a)));
+	for (const [key, value] of allTagEntries) {
+		const keyMatch = key.match(/^\s*dtrk\s*(\d+)\s*$/i);
+		if (keyMatch && value.trim()) dtrkByIndex.set(Number(keyMatch[1]), cleanName(stripMetadataTail(value)));
 	}
-	return [...r.entries()].sort((e, t) => e[0] - t[0]).map(([, e]) => e);
+	return [...dtrkByIndex.entries()].sort((a, b) => a[0] - b[0]).map(([, name]) => name);
 }
-function ne(e) {
-	if (!h(e.channels)) return {
+function classifyWav(probe) {
+	if (!isSupportedChannelCount(probe.channels)) return {
 		type: "unknown",
 		trackNames: [],
-		reason: `Unsupported channel count: ${e.channels}`
+		reason: `Unsupported channel count: ${probe.channels}`
 	};
-	let t = te(e);
-	if (t.length > 0) return {
-		type: "bounce-polywav",
-		trackNames: t,
+	const dtrkNames = extractDtrkNames(probe);
+	if (dtrkNames.length > 0) return {
+		type: "multitrack-wav",
+		trackNames: dtrkNames,
 		reason: "dTRK metadata detected"
 	};
-	let n = ee(e), r = (e.channelLayout ?? "").toLowerCase();
-	return r.includes("l r c lfe lb rb ls rs") || r.includes("l r c lfe ls rs") || r.includes("l r ls rs") || r.includes("7.1") || r.includes("5.1") || n.includes("l r c lfe lb rb ls rs") ? {
-		type: "legacy-surround-print",
+	const tagBlob = normalizeTags$1(probe);
+	const layout = (probe.channelLayout ?? "").toLowerCase();
+	if (layout.includes("l r c lfe lb rb ls rs") || layout.includes("l r c lfe ls rs") || layout.includes("l r ls rs") || layout.includes("7.1") || layout.includes("5.1") || tagBlob.includes("l r c lfe lb rb ls rs")) return {
+		type: "legacy-surround-track",
 		trackNames: [],
 		reason: "Legacy surround channel layout detected"
-	} : e.channels === 2 || e.channels === 4 ? {
-		type: "legacy-surround-print",
+	};
+	if (probe.channels === 2 || probe.channels === 4) return {
+		type: "legacy-surround-track",
 		trackNames: [],
 		reason: "No dTRK metadata found for stereo/quad WAV, defaulting to legacy mapping"
-	} : {
+	};
+	return {
 		type: "unknown",
 		trackNames: [],
 		reason: "No dTRK metadata and no known legacy layout found"
@@ -104,445 +163,697 @@ function ne(e) {
 }
 //#endregion
 //#region src/main/ffprobeService.ts
-function v(e) {
-	if (!e) return {};
-	let t = {};
-	for (let [n, r] of Object.entries(e)) t[n.toLowerCase()] = r;
-	return t;
+function normalizeTags(tags) {
+	if (!tags) return {};
+	const normalized = {};
+	for (const [key, value] of Object.entries(tags)) normalized[key.toLowerCase()] = value;
+	return normalized;
 }
-async function y(e, t) {
-	return new Promise((n, r) => {
-		let i = l(t, [
+async function analyzeWavWithFfprobe(wavPath, ffprobePath) {
+	return new Promise((resolve, reject) => {
+		const child = spawn(ffprobePath, [
 			"-v",
 			"error",
 			"-print_format",
 			"json",
 			"-show_streams",
 			"-show_format",
-			e
+			wavPath
 		], { stdio: [
 			"ignore",
 			"pipe",
 			"pipe"
-		] }), a = "", o = "";
-		i.stdout.on("data", (e) => {
-			a += e.toString();
-		}), i.stderr.on("data", (e) => {
-			o += e.toString();
-		}), i.on("error", (e) => {
-			r(/* @__PURE__ */ Error(`Unable to start ffprobe: ${e.message}`));
-		}), i.on("close", (e) => {
-			if (e !== 0) {
-				r(/* @__PURE__ */ Error(`ffprobe exited with code ${e}: ${o.trim()}`));
+		] });
+		let stdout = "";
+		let stderr = "";
+		child.stdout.on("data", (chunk) => {
+			stdout += chunk.toString();
+		});
+		child.stderr.on("data", (chunk) => {
+			stderr += chunk.toString();
+		});
+		child.on("error", (error) => {
+			reject(/* @__PURE__ */ new Error(`Unable to start ffprobe: ${error.message}`));
+		});
+		child.on("close", (code) => {
+			if (code !== 0) {
+				reject(/* @__PURE__ */ new Error(`ffprobe exited with code ${code}: ${stderr.trim()}`));
 				return;
 			}
 			try {
-				let e = JSON.parse(a), t = e.streams?.find((e) => typeof e.channels == "number");
-				if (!t || typeof t.channels != "number") {
-					r(/* @__PURE__ */ Error("No audio stream with channel information found in WAV file"));
+				const parsed = JSON.parse(stdout);
+				const audioStream = parsed.streams?.find((stream) => typeof stream.channels === "number");
+				if (!audioStream || typeof audioStream.channels !== "number") {
+					reject(/* @__PURE__ */ new Error("No audio stream with channel information found in WAV file"));
 					return;
 				}
-				n({
-					channels: t.channels,
-					channelLayout: t.channel_layout,
-					sampleRate: t.sample_rate ? Number(t.sample_rate) : void 0,
-					bitsPerSample: t.bits_per_sample,
-					durationSeconds: t.duration ? Number(t.duration) : e.format?.duration ? Number(e.format.duration) : void 0,
-					codecName: t.codec_name,
-					streamTags: v(t.tags),
-					formatTags: v(e.format?.tags)
+				resolve({
+					channels: audioStream.channels,
+					channelLayout: audioStream.channel_layout,
+					sampleRate: audioStream.sample_rate ? Number(audioStream.sample_rate) : void 0,
+					bitsPerSample: audioStream.bits_per_sample,
+					durationSeconds: audioStream.duration ? Number(audioStream.duration) : parsed.format?.duration ? Number(parsed.format.duration) : void 0,
+					codecName: audioStream.codec_name,
+					streamTags: normalizeTags(audioStream.tags),
+					formatTags: normalizeTags(parsed.format?.tags)
 				});
-			} catch (e) {
-				r(/* @__PURE__ */ Error(`Could not parse ffprobe output: ${e.message}`));
+			} catch (error) {
+				reject(/* @__PURE__ */ new Error(`Could not parse ffprobe output: ${error.message}`));
 			}
 		});
 	});
 }
-async function re(e, t) {
-	return new Promise((n, r) => {
-		let i = l(t, [
+async function analyzeMxfWithFfprobe(mxfPath, ffprobePath) {
+	return new Promise((resolve, reject) => {
+		const child = spawn(ffprobePath, [
 			"-v",
 			"error",
 			"-print_format",
 			"json",
 			"-show_streams",
 			"-show_format",
-			e
+			mxfPath
 		], { stdio: [
 			"ignore",
 			"pipe",
 			"pipe"
-		] }), a = "", o = "";
-		i.stdout.on("data", (e) => {
-			a += e.toString();
-		}), i.stderr.on("data", (e) => {
-			o += e.toString();
-		}), i.on("error", (e) => {
-			r(/* @__PURE__ */ Error(`Unable to start ffprobe: ${e.message}`));
-		}), i.on("close", (e) => {
-			if (e !== 0) {
-				r(/* @__PURE__ */ Error(`ffprobe exited with code ${e}: ${o.trim()}`));
+		] });
+		let stdout = "";
+		let stderr = "";
+		child.stdout.on("data", (chunk) => {
+			stdout += chunk.toString();
+		});
+		child.stderr.on("data", (chunk) => {
+			stderr += chunk.toString();
+		});
+		child.on("error", (error) => {
+			reject(/* @__PURE__ */ new Error(`Unable to start ffprobe: ${error.message}`));
+		});
+		child.on("close", (code) => {
+			if (code !== 0) {
+				reject(/* @__PURE__ */ new Error(`ffprobe exited with code ${code}: ${stderr.trim()}`));
 				return;
 			}
 			try {
-				let e = JSON.parse(a), t = e.streams ?? [], i = t.find((e) => e.codec_type === "video"), o = t.filter((e) => e.codec_type === "audio");
-				if (!i) {
-					r(/* @__PURE__ */ Error("No video stream found in MXF file"));
+				const parsed = JSON.parse(stdout);
+				const streams = parsed.streams ?? [];
+				const videoStream = streams.find((stream) => stream.codec_type === "video");
+				const audioStreams = streams.filter((stream) => stream.codec_type === "audio");
+				if (!videoStream) {
+					reject(/* @__PURE__ */ new Error("No video stream found in MXF file"));
 					return;
 				}
-				n({
-					durationSeconds: e.format?.duration ? Number(e.format.duration) : void 0,
-					videoCodecName: i.codec_name,
-					audioStreamCount: o.length,
-					streamCount: t.length,
-					formatTags: v(e.format?.tags)
+				resolve({
+					durationSeconds: parsed.format?.duration ? Number(parsed.format.duration) : void 0,
+					videoCodecName: videoStream.codec_name,
+					audioStreamCount: audioStreams.length,
+					streamCount: streams.length,
+					formatTags: normalizeTags(parsed.format?.tags)
 				});
-			} catch (e) {
-				r(/* @__PURE__ */ Error(`Could not parse ffprobe output: ${e.message}`));
+			} catch (error) {
+				reject(/* @__PURE__ */ new Error(`Could not parse ffprobe output: ${error.message}`));
 			}
 		});
 	});
 }
 //#endregion
 //#region src/main/filePublisher.ts
-async function b(e) {
-	let t = await u.stat(e);
-	if (!t.isFile()) throw Error(`Temp export is not a file: ${e}`);
-	if (t.size <= 0) throw Error(`Temp export is empty: ${e}`);
+async function ensureFinishedTempFile(tempFile) {
+	const stats = await fs$1.stat(tempFile);
+	if (!stats.isFile()) throw new Error(`Temp export is not a file: ${tempFile}`);
+	if (stats.size <= 0) throw new Error(`Temp export is empty: ${tempFile}`);
 }
-async function x(t) {
-	let n = e.parse(t);
-	for (let t = 0; t < 1e3; t += 1) {
-		let r = t === 0 ? "" : `__${String(t).padStart(3, "0")}`, i = e.join(n.dir, `${n.name}${r}${n.ext}`);
+async function resolvePublishTarget(preferredTarget) {
+	const parsed = path.parse(preferredTarget);
+	for (let attempt = 0; attempt < 1e3; attempt += 1) {
+		const suffix = attempt === 0 ? "" : `__${String(attempt).padStart(3, "0")}`;
+		const candidate = path.join(parsed.dir, `${parsed.name}${suffix}${parsed.ext}`);
 		try {
-			await u.access(i);
+			await fs$1.access(candidate);
 		} catch {
 			return {
-				path: i,
-				conflictResolved: t > 0
+				path: candidate,
+				conflictResolved: attempt > 0
 			};
 		}
 	}
-	throw Error(`Could not resolve publish target after many conflicts: ${t}`);
+	throw new Error(`Could not resolve publish target after many conflicts: ${preferredTarget}`);
 }
-async function S(t, n) {
-	if (!n.trim()) throw Error("Watchfolder is not configured.");
-	await b(t), await u.mkdir(n, { recursive: !0 });
-	let r = await x(e.join(n, e.basename(t))), i = e.join(n, `.${e.basename(r.path)}.${Date.now()}.eventpipe-copying`), a = !1;
+async function publishToWatchFolder(tempFile, watchFolder) {
+	if (!watchFolder.trim()) throw new Error("Watchfolder is not configured.");
+	await ensureFinishedTempFile(tempFile);
+	await fs$1.mkdir(watchFolder, { recursive: true });
+	const target = await resolvePublishTarget(path.join(watchFolder, path.basename(tempFile)));
+	const stagingPath = path.join(watchFolder, `.${path.basename(target.path)}.${Date.now()}.eventpipe-copying`);
+	let sourceMoved = false;
 	try {
 		try {
-			await u.rename(t, i), a = !0;
-		} catch (e) {
-			if ((typeof e == "object" && e && "code" in e ? String(e.code) : "") !== "EXDEV") throw e;
-			await u.copyFile(t, i), await u.rm(t, { force: !0 }), a = !0;
+			await fs$1.rename(tempFile, stagingPath);
+			sourceMoved = true;
+		} catch (moveError) {
+			if ((typeof moveError === "object" && moveError !== null && "code" in moveError ? String(moveError.code) : "") !== "EXDEV") throw moveError;
+			await fs$1.copyFile(tempFile, stagingPath);
+			await fs$1.rm(tempFile, { force: true });
+			sourceMoved = true;
 		}
-		await u.rename(i, r.path);
-	} catch (e) {
-		if (a) try {
-			await u.rename(i, t);
+		await fs$1.rename(stagingPath, target.path);
+	} catch (error) {
+		if (sourceMoved) try {
+			await fs$1.rename(stagingPath, tempFile);
 		} catch {
-			await u.rm(i, { force: !0 });
+			await fs$1.rm(stagingPath, { force: true });
 		}
-		else await u.rm(i, { force: !0 });
-		let n = e instanceof Error ? e.message : String(e);
-		throw Error(`Publishing to watchfolder failed: ${n}`);
+		else await fs$1.rm(stagingPath, { force: true });
+		const message = error instanceof Error ? error.message : String(error);
+		throw new Error(`Publishing to watchfolder failed: ${message}`);
 	}
 	return {
-		publishedPath: r.path,
-		conflictResolved: r.conflictResolved
+		publishedPath: target.path,
+		conflictResolved: target.conflictResolved
 	};
 }
 //#endregion
 //#region src/main/ffmpegService.ts
-function C(e, t, n, r) {
-	let i = n.map((e, t) => `[1:a]pan=mono|c0=c${e.wavChannel - 1}[a${t}]`), a = n.flatMap((e, t) => ["-map", `[a${t}]`]);
+function buildFfmpegArgs(mxfPath, wavPath, mapping, outputPath) {
+	const filterChains = mapping.map((entry, index) => `[1:a]pan=mono|c0=c${entry.wavChannel - 1}[a${index}]`);
+	const mappedMonoStreams = mapping.flatMap((_entry, index) => ["-map", `[a${index}]`]);
 	return [
 		"-i",
-		e,
+		mxfPath,
 		"-i",
-		t,
+		wavPath,
 		"-stats",
 		"-map",
 		"0:v",
 		"-filter_complex",
-		i.join(";"),
+		filterChains.join(";"),
 		"-c:v",
 		"copy",
-		...a,
+		...mappedMonoStreams,
 		"-c:a",
 		"pcm_s24le",
 		"-y",
-		r
+		outputPath
 	];
 }
-function ie(e, t) {
-	return (e.trim() || "{sourceName}").replaceAll("{sourceName}", t);
+function applyNamingPreset(preset, sourceName) {
+	return (preset.trim() || "{sourceName}").replaceAll("{sourceName}", sourceName);
 }
-function w(e) {
-	return e.replace(/[<>:"/\\|?*\u0000-\u001F]/g, "_").trim() || "eventpipe-export";
+function sanitizeFileNameSegment(value) {
+	return value.replace(/[<>:"/\\|?*\u0000-\u001F]/g, "_").trim() || "eventpipe-export";
 }
-function T(e) {
-	let [t, n, r] = e.split(":");
-	return Number(t) * 3600 + Number(n) * 60 + Number(r);
+function parseTimecodeToSeconds(timecode) {
+	const [hh, mm, ss] = timecode.split(":");
+	return Number(hh) * 3600 + Number(mm) * 60 + Number(ss);
 }
-function ae(e, t) {
-	let n = /time=([0-9:.]+)/.exec(e), r = /speed=\s*([0-9.]+x)/.exec(e);
-	if (!n && !r) return;
-	let i = {
-		timecode: n?.[1],
-		speed: r?.[1]
+function parseProgress(rawLine, inputDurationSeconds) {
+	const timeMatch = /time=([0-9:.]+)/.exec(rawLine);
+	const speedMatch = /speed=\s*([0-9.]+x)/.exec(rawLine);
+	if (!timeMatch && !speedMatch) return;
+	const update = {
+		timecode: timeMatch?.[1],
+		speed: speedMatch?.[1]
 	};
-	if (n && typeof t == "number" && t > 0) {
-		let e = T(n[1]);
-		i.percent = Math.max(0, Math.min(100, e / t * 100));
+	if (timeMatch && typeof inputDurationSeconds === "number" && inputDurationSeconds > 0) {
+		const seconds = parseTimecodeToSeconds(timeMatch[1]);
+		update.percent = Math.max(0, Math.min(100, seconds / inputDurationSeconds * 100));
 	}
-	return i;
+	return update;
 }
-async function E(t, n, r, i) {
-	let a = (/* @__PURE__ */ new Date()).toISOString().replace(/[:.]/g, "-"), o = e.join(n.tempExportFolder, "logs");
-	await u.mkdir(o, { recursive: !0 });
-	let s = `${a}-${w(t)}-${i}.log`, c = e.join(o, s);
-	return await u.writeFile(c, r, "utf-8"), c;
+async function writeExportLog(sourceName, settings, content, status) {
+	const timestamp = (/* @__PURE__ */ new Date()).toISOString().replace(/[:.]/g, "-");
+	const logsDir = path.join(settings.tempExportFolder, "logs");
+	await fs$1.mkdir(logsDir, { recursive: true });
+	const fileName = `${timestamp}-${sanitizeFileNameSegment(sourceName)}-${status}.log`;
+	const logPath = path.join(logsDir, fileName);
+	await fs$1.writeFile(logPath, content, "utf-8");
+	return logPath;
 }
-function D(e, t, n, r) {
-	return new Promise((i, a) => {
-		let o = l(e, t, { windowsHide: !0 }), s = "", c = "";
-		o.stdout.on("data", (e) => {
-			s += e.toString();
-		}), o.stderr.on("data", (e) => {
-			let t = e.toString();
-			s += t, c += t;
-			let i = c.split(/\r|\n/);
-			c = i.pop() ?? "";
-			for (let e of i) {
-				let t = ae(e, n);
-				t && r && r(t);
+function runFfmpeg(command, args, inputDurationSeconds, onProgress) {
+	return new Promise((resolve, reject) => {
+		const child = spawn(command, args, { windowsHide: true });
+		let output = "";
+		let progressBuffer = "";
+		child.stdout.on("data", (chunk) => {
+			output += chunk.toString();
+		});
+		child.stderr.on("data", (chunk) => {
+			const text = chunk.toString();
+			output += text;
+			progressBuffer += text;
+			const lines = progressBuffer.split(/\r|\n/);
+			progressBuffer = lines.pop() ?? "";
+			for (const line of lines) {
+				const update = parseProgress(line, inputDurationSeconds);
+				if (update && onProgress) onProgress(update);
 			}
-		}), o.on("error", (e) => {
-			a(/* @__PURE__ */ Error(`Failed to start ffmpeg: ${e.message}`));
-		}), o.on("close", (e) => {
-			if (e === 0) {
-				i(s.trim());
+		});
+		child.on("error", (error) => {
+			reject(/* @__PURE__ */ new Error(`Failed to start ffmpeg: ${error.message}`));
+		});
+		child.on("close", (exitCode) => {
+			if (exitCode === 0) {
+				resolve(output.trim());
 				return;
 			}
-			a(Error(`ffmpeg exited with code ${e}.\n${s.trim()}`.trim()));
+			reject(new Error(`ffmpeg exited with code ${exitCode}.\n${output.trim()}`.trim()));
 		});
 	});
 }
-async function O(t, n, r) {
-	let i = e.parse(t.mxfPath).name, a = t.customFileName ? `${w(t.customFileName)}.mxf` : `${w(ie(n.namingPreset, i))}.mxf`;
-	await u.mkdir(n.tempExportFolder, { recursive: !0 });
-	let o = e.join(n.tempExportFolder, a), s = C(t.mxfPath, t.wavPath, t.mapping, o), c = await y(t.wavPath, n.ffprobePath);
+async function exportMxfWithMappedAudio(request, settings, onProgress) {
+	const sourceName = path.parse(request.mxfPath).name;
+	const targetName = request.customFileName ? `${sanitizeFileNameSegment(request.customFileName)}.mxf` : `${sanitizeFileNameSegment(applyNamingPreset(settings.namingPreset, sourceName))}.mxf`;
+	await fs$1.mkdir(settings.tempExportFolder, { recursive: true });
+	const outputPath = path.join(settings.tempExportFolder, targetName);
+	const args = buildFfmpegArgs(request.mxfPath, request.wavPath, request.mapping, outputPath);
+	const wavProbe = await analyzeWavWithFfprobe(request.wavPath, settings.ffprobePath);
 	try {
-		let e = await D(n.ffmpegPath, s, c.durationSeconds, r), t = await S(o, n.watchFolder), a = await E(i, n, e, "success");
+		const log = await runFfmpeg(settings.ffmpegPath, args, wavProbe.durationSeconds, onProgress);
+		const published = await publishToWatchFolder(outputPath, settings.watchFolder);
+		const logPath = await writeExportLog(sourceName, settings, log, "success");
 		return {
-			outputPath: t.publishedPath,
-			tempOutputPath: o,
-			publishedPath: t.publishedPath,
-			publishConflictResolved: t.conflictResolved,
-			command: n.ffmpegPath,
-			args: s,
-			log: e,
-			logPath: a
+			outputPath: published.publishedPath,
+			tempOutputPath: outputPath,
+			publishedPath: published.publishedPath,
+			publishConflictResolved: published.conflictResolved,
+			command: settings.ffmpegPath,
+			args,
+			log,
+			logPath
 		};
-	} catch (e) {
-		let t = e instanceof Error ? e.message : String(e), r = await E(i, n, t, "error");
-		throw Error(`Export failed. Log: ${r}\n${t}`);
+	} catch (error) {
+		const message = error instanceof Error ? error.message : String(error);
+		const logPath = await writeExportLog(sourceName, settings, message, "error");
+		throw new Error(`Export failed. Log: ${logPath}\n${message}`);
 	}
-}
-//#endregion
-//#region src/main/historyService.ts
-function k(t) {
-	return e.join(e.dirname(t), "export-history.jsonl");
-}
-async function A(t, n) {
-	await u.mkdir(e.dirname(t), { recursive: !0 }), await u.appendFile(t, `${JSON.stringify(n)}\n`, "utf-8");
-}
-async function oe(e, t = 20) {
-	try {
-		let n = (await u.readFile(e, "utf-8")).split("\n").map((e) => e.trim()).filter((e) => e.length > 0), r = [];
-		for (let e = n.length - 1; e >= 0 && r.length < t; --e) try {
-			r.push(JSON.parse(n[e]));
-		} catch {}
-		return r;
-	} catch {
-		return [];
-	}
-}
-//#endregion
-//#region src/main/logService.ts
-function se(e) {
-	let t = {
-		ts: (/* @__PURE__ */ new Date()).toISOString(),
-		...e
-	};
-	console.log(JSON.stringify(t));
 }
 //#endregion
 //#region src/main/settingsService.ts
-var j = "config.json";
-function M(t) {
-	let r = process.platform === "win32" ? `${t}.exe` : t, i = [
-		e.join(process.resourcesPath, "bin", r),
-		e.join(process.resourcesPath, "tools", r),
-		e.join(process.cwd(), "resources", "bin", r)
+var CONFIG_FILE_NAME = "config.json";
+function resolveBinaryPath(binaryName) {
+	const executableName = process.platform === "win32" ? `${binaryName}.exe` : binaryName;
+	const bundledCandidates = [
+		path.join(process.resourcesPath, "bin", executableName),
+		path.join(process.resourcesPath, "tools", executableName),
+		path.join(process.cwd(), "resources", "bin", executableName)
 	];
-	for (let e of i) if (n(e)) return e;
-	if (process.platform === "darwin") for (let r of ["/opt/homebrew/bin", "/usr/local/bin"]) {
-		let i = e.join(r, t);
-		if (n(i)) return i;
+	for (const candidate of bundledCandidates) if (existsSync(candidate)) return candidate;
+	if (process.platform === "darwin") for (const dir of ["/opt/homebrew/bin", "/usr/local/bin"]) {
+		const candidate = path.join(dir, binaryName);
+		if (existsSync(candidate)) return candidate;
 	}
-	return t;
+	return binaryName;
 }
-var N = {
-	watchFolder: e.join(process.cwd(), "eventpipe-watchfolder"),
-	tempExportFolder: e.join(process.cwd(), "eventpipe-temp"),
-	ffmpegPath: M("ffmpeg"),
-	ffprobePath: M("ffprobe"),
+var DEFAULT_SETTINGS = {
+	watchFolder: path.join(process.cwd(), "eventpipe-watchfolder"),
+	tempExportFolder: path.join(process.cwd(), "eventpipe-temp"),
+	ffmpegPath: resolveBinaryPath("ffmpeg"),
+	ffprobePath: resolveBinaryPath("ffprobe"),
 	namingPreset: "{sourceName}",
 	maxDurationDeltaSeconds: .2,
-	debugLoggingEnabled: !1
+	debugLoggingEnabled: false
 };
-function P(e, t) {
-	if (typeof e != "string") return t;
-	let n = e.trim();
-	return n.length > 0 ? n : t;
+function ensureText(value, fallback) {
+	if (typeof value !== "string") return fallback;
+	const trimmed = value.trim();
+	return trimmed.length > 0 ? trimmed : fallback;
 }
-function F(e) {
-	let t = M("ffmpeg"), n = M("ffprobe");
+function sanitizeSettings(raw) {
+	const ffmpegPath = resolveBinaryPath("ffmpeg");
+	const ffprobePath = resolveBinaryPath("ffprobe");
 	return {
-		watchFolder: P(e?.watchFolder, N.watchFolder),
-		tempExportFolder: P(e?.tempExportFolder, N.tempExportFolder),
-		ffmpegPath: t,
-		ffprobePath: n,
-		namingPreset: P(e?.namingPreset, N.namingPreset),
-		maxDurationDeltaSeconds: N.maxDurationDeltaSeconds,
-		debugLoggingEnabled: N.debugLoggingEnabled
+		watchFolder: ensureText(raw?.watchFolder, DEFAULT_SETTINGS.watchFolder),
+		tempExportFolder: ensureText(raw?.tempExportFolder, DEFAULT_SETTINGS.tempExportFolder),
+		ffmpegPath,
+		ffprobePath,
+		namingPreset: ensureText(raw?.namingPreset, DEFAULT_SETTINGS.namingPreset),
+		maxDurationDeltaSeconds: DEFAULT_SETTINGS.maxDurationDeltaSeconds,
+		debugLoggingEnabled: DEFAULT_SETTINGS.debugLoggingEnabled
 	};
 }
-function I() {
+function getConfigPath() {
 	if (process.env.EVENTPIPE_CONFIG_PATH?.trim()) return process.env.EVENTPIPE_CONFIG_PATH.trim();
-	if (process.platform === "darwin") return e.join("/Users/Shared", "immo24-eventpipe", j);
+	if (process.platform === "darwin") return path.join("/Users/Shared", "immo24-eventpipe", CONFIG_FILE_NAME);
 	if (process.platform === "win32") {
-		let t = process.env.PROGRAMDATA?.trim() || e.join("C:", "ProgramData");
-		return e.join(t, "immo24-eventpipe", j);
+		const programData = process.env.PROGRAMDATA?.trim() || path.join("C:", "ProgramData");
+		return path.join(programData, "immo24-eventpipe", CONFIG_FILE_NAME);
 	}
-	return e.join("/var/lib", "immo24-eventpipe", j);
+	return path.join("/var/lib", "immo24-eventpipe", CONFIG_FILE_NAME);
 }
-async function L(e) {
+async function hasSettingsFile(configPath) {
 	try {
-		return await u.access(e), !0;
+		await fs$1.access(configPath);
+		return true;
 	} catch {
-		return !1;
+		return false;
 	}
 }
-async function R(e) {
+async function loadSettings(configPath) {
 	try {
-		let t = await u.readFile(e, "utf-8");
-		return F(JSON.parse(t));
+		const payload = await fs$1.readFile(configPath, "utf-8");
+		return sanitizeSettings(JSON.parse(payload));
 	} catch {
-		return { ...N };
+		return { ...DEFAULT_SETTINGS };
 	}
 }
-async function z(t, n) {
-	let r = F(n);
-	return await u.mkdir(e.dirname(t), { recursive: !0 }), await u.writeFile(t, `${JSON.stringify(r, null, 2)}\n`, "utf-8"), r;
+async function saveSettings(configPath, raw) {
+	const settings = sanitizeSettings(raw);
+	await fs$1.mkdir(path.dirname(configPath), { recursive: true });
+	await fs$1.writeFile(configPath, `${JSON.stringify(settings, null, 2)}\n`, "utf-8");
+	return settings;
+}
+//#endregion
+//#region src/main/registerIpcHandlers.ts
+function createHistoryId() {
+	return `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
+function isPathWithin(parentPath, candidatePath) {
+	const relative = path.relative(parentPath, candidatePath);
+	return relative.length > 0 && !relative.startsWith("..") && !path.isAbsolute(relative);
+}
+function registerIpcHandlers(options) {
+	const { getActiveSettings, setActiveSettings, getActiveConfigPath, getActiveHistoryPath, openWorkflowWindow, workflowStartPayloadByWebContentsId, getDialogOwnerWindow, debugLog, withRuntimeDebugLogging, isTrustedRenderer } = options;
+	function assertTrustedSender(event) {
+		const frameUrl = event.senderFrame?.url ?? "";
+		if (isTrustedRenderer(event.sender.id, frameUrl)) return;
+		throw new Error("Untrusted renderer attempted to call privileged IPC handler.");
+	}
+	function guarded(handler) {
+		return (event, ...args) => {
+			assertTrustedSender(event);
+			return handler(event, ...args);
+		};
+	}
+	ipcMain.handle("eventpipe:get-settings", guarded(() => {
+		return {
+			settings: getActiveSettings(),
+			configPath: getActiveConfigPath()
+		};
+	}));
+	ipcMain.handle("eventpipe:open-workflow-window", guarded((_event, payload) => {
+		openWorkflowWindow(payload);
+		return true;
+	}));
+	ipcMain.handle("eventpipe:get-workflow-start-payload", guarded((event) => {
+		const payload = workflowStartPayloadByWebContentsId.get(event.sender.id);
+		workflowStartPayloadByWebContentsId.delete(event.sender.id);
+		return payload;
+	}));
+	ipcMain.handle("eventpipe:get-export-history", guarded(async (_event, limit) => {
+		const safeLimit = Math.max(1, Math.min(100, typeof limit === "number" ? Math.floor(limit) : 20));
+		return readExportHistory(getActiveHistoryPath(), safeLimit);
+	}));
+	ipcMain.handle("eventpipe:pick-directory", guarded(async (_event, initialPath) => {
+		const ownerWindow = getDialogOwnerWindow();
+		const dialogOptions = {
+			title: "Ordner auswählen",
+			properties: [
+				"openDirectory",
+				"createDirectory",
+				"promptToCreate"
+			],
+			defaultPath: initialPath?.trim() || void 0
+		};
+		const result = ownerWindow ? await dialog.showOpenDialog(ownerWindow, dialogOptions) : await dialog.showOpenDialog(dialogOptions);
+		if (result.canceled || result.filePaths.length === 0) return;
+		return result.filePaths[0];
+	}));
+	ipcMain.handle("eventpipe:open-path", guarded(async (_event, targetPath) => {
+		if (!targetPath?.trim()) return false;
+		const resolvedTargetPath = path.resolve(targetPath);
+		if (!isPathWithin(path.resolve(getActiveSettings().tempExportFolder, "logs"), resolvedTargetPath)) return false;
+		if (!resolvedTargetPath.toLowerCase().endsWith(".log")) return false;
+		return (await shell.openPath(resolvedTargetPath)).length === 0;
+	}));
+	ipcMain.handle("eventpipe:save-settings", guarded(async (_event, input) => {
+		const merged = {
+			...getActiveSettings(),
+			...input
+		};
+		const saved = await saveSettings(getActiveConfigPath(), merged);
+		const runtimeSettings = withRuntimeDebugLogging(saved);
+		setActiveSettings(runtimeSettings);
+		debugLog("Settings saved", { configPath: getActiveConfigPath() });
+		return {
+			settings: runtimeSettings,
+			configPath: getActiveConfigPath()
+		};
+	}));
+	ipcMain.handle("eventpipe:analyze-mxf", guarded(async (_event, mxfPath) => {
+		debugLog("Analyze MXF requested", { mxfPath });
+		return { probe: await analyzeMxfWithFfprobe(mxfPath, getActiveSettings().ffprobePath) };
+	}));
+	ipcMain.handle("eventpipe:analyze-wav", guarded(async (_event, wavPath) => {
+		debugLog("Analyze WAV requested", { wavPath });
+		const probe = await analyzeWavWithFfprobe(wavPath, getActiveSettings().ffprobePath);
+		const classification = classifyWav(probe);
+		if (!isSupportedChannelCount(probe.channels)) throw new Error(`Unsupported channel count ${probe.channels}. Allowed: 2, 4, 6, 8.`);
+		return {
+			probe,
+			classification,
+			mapping: classification.type === "legacy-surround-track" ? buildLegacyMapping(probe.channels) : buildBounceMapping(probe.channels, classification.trackNames)
+		};
+	}));
+	ipcMain.handle("eventpipe:export-job", guarded(async (event, request) => {
+		if (!request.mxfPath || !request.wavPath || request.mapping.length === 0) throw new Error("Export request is incomplete.");
+		debugLog("Export requested", {
+			mxfPath: request.mxfPath,
+			wavPath: request.wavPath,
+			mappingEntries: request.mapping.length
+		});
+		event.sender.send("eventpipe:export-progress", { percent: 0 });
+		try {
+			const result = await exportMxfWithMappedAudio(request, getActiveSettings(), (update) => {
+				event.sender.send("eventpipe:export-progress", update);
+			});
+			const successEntry = {
+				id: createHistoryId(),
+				timestamp: (/* @__PURE__ */ new Date()).toISOString(),
+				status: "success",
+				mxfPath: request.mxfPath,
+				wavPath: request.wavPath,
+				outputPath: result.outputPath,
+				tempOutputPath: result.tempOutputPath,
+				publishedPath: result.publishedPath,
+				publishConflictResolved: result.publishConflictResolved,
+				logPath: result.logPath,
+				detectedWavType: request.metadata?.detectedWavType,
+				selectedWavType: request.metadata?.selectedWavType,
+				manualSelectionApplied: request.metadata?.manualSelectionApplied,
+				classificationReason: request.metadata?.classificationReason,
+				mappingCount: request.mapping.length
+			};
+			await appendExportHistory(getActiveHistoryPath(), successEntry);
+			event.sender.send("eventpipe:export-progress", { percent: 100 });
+			return result;
+		} catch (exportError) {
+			const message = exportError instanceof Error ? exportError.message : String(exportError);
+			const logPathMatch = message.match(/Export failed\. Log: (.+)\n/);
+			const errorEntry = {
+				id: createHistoryId(),
+				timestamp: (/* @__PURE__ */ new Date()).toISOString(),
+				status: "error",
+				mxfPath: request.mxfPath,
+				wavPath: request.wavPath,
+				logPath: logPathMatch?.[1]?.trim(),
+				errorMessage: message,
+				detectedWavType: request.metadata?.detectedWavType,
+				selectedWavType: request.metadata?.selectedWavType,
+				manualSelectionApplied: request.metadata?.manualSelectionApplied,
+				classificationReason: request.metadata?.classificationReason,
+				mappingCount: request.mapping.length
+			};
+			await appendExportHistory(getActiveHistoryPath(), errorEntry);
+			throw exportError;
+		}
+	}));
 }
 //#endregion
 //#region src/main/index.ts
-var B = null, V = null, H = null, U = 0, W = { ...N }, G = "", K = "", q = !1, ce = process.argv.includes("--debug-logging") || [
+var mainWindow = null;
+var splashWindow = null;
+var settingsWindow = null;
+var workflowWindow = null;
+var workflowStartPayloadByWebContentsId = /* @__PURE__ */ new Map();
+var splashShownAt = 0;
+var activeSettings = { ...DEFAULT_SETTINGS };
+var activeConfigPath = "";
+var activeHistoryPath = "";
+var shouldOpenSettingsOnStartup = false;
+var cliDebugLoggingEnabled = process.argv.includes("--debug-logging") || [
 	"1",
 	"true",
 	"yes",
 	"on"
-].includes((process.env.EVENTPIPE_DEBUG_LOGGING || "").toLowerCase()), J = r(import.meta.url), Y = e.dirname(J);
-o.requestSingleInstanceLock() || o.quit();
-function X(e) {
-	return {
-		...e,
-		debugLoggingEnabled: ce
-	};
-}
-function Z(e, t) {
-	W.debugLoggingEnabled && se({
-		level: "info",
-		message: e,
-		context: t
-	});
-}
-function le() {
-	let n = o.getAppPath(), r = [e.resolve(n, "src/assets/icon.png"), e.resolve(n, "dist/assets/icon.png")];
-	for (let e of r) if (t.existsSync(e)) return `data:image/png;base64,${t.readFileSync(e).toString("base64")}`;
-	return "";
-}
-function ue() {
-	V = new i({
-		width: 420,
-		height: 250,
-		frame: !1,
-		transparent: !0,
-		resizable: !1,
-		minimizable: !1,
-		maximizable: !1,
-		fullscreenable: !1,
-		alwaysOnTop: !0,
-		movable: !0,
-		show: !1,
-		webPreferences: {
-			contextIsolation: !0,
-			sandbox: !0
-		}
-	});
-	let e = f.replace("__SPLASH_ICON_SRC__", le());
-	V.loadURL(`data:text/html;charset=UTF-8,${encodeURIComponent(e)}`), V.once("ready-to-show", () => {
-		U = Date.now(), V?.show();
-	});
-}
-function Q() {
-	if (H && !H.isDestroyed()) {
-		H.focus();
+].includes((process.env.EVENTPIPE_DEBUG_LOGGING || "").toLowerCase());
+var __filename = fileURLToPath(import.meta.url);
+var __dirname = path.dirname(__filename);
+if (!app.requestSingleInstanceLock()) app.quit();
+function getDevServerOrigin() {
+	if (!process.env.VITE_DEV_SERVER_URL) return;
+	try {
+		return new URL(process.env.VITE_DEV_SERVER_URL).origin;
+	} catch {
 		return;
 	}
-	let t = B && !B.isDestroyed() && B.isVisible() ? B : void 0;
-	H = new i({
+}
+function attachNavigationGuards(window, isAllowedUrl) {
+	window.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
+	window.webContents.on("will-navigate", (event, navigationUrl) => {
+		if (isAllowedUrl(navigationUrl)) return;
+		event.preventDefault();
+	});
+}
+function withRuntimeDebugLogging(settings) {
+	return {
+		...settings,
+		debugLoggingEnabled: cliDebugLoggingEnabled
+	};
+}
+function debugLog(message, context) {
+	if (!activeSettings.debugLoggingEnabled) return;
+	writeLog({
+		level: "info",
+		message,
+		context
+	});
+}
+function resolveSplashIconDataUrl() {
+	const appPath = app.getAppPath();
+	const candidates = [path.resolve(appPath, "src/assets/icon.png"), path.resolve(appPath, "dist/assets/icon.png")];
+	for (const filePath of candidates) {
+		if (!fs.existsSync(filePath)) continue;
+		return `data:image/png;base64,${fs.readFileSync(filePath).toString("base64")}`;
+	}
+	return "";
+}
+function createSplashWindow() {
+	splashWindow = new BrowserWindow({
+		width: 420,
+		height: 250,
+		frame: false,
+		transparent: true,
+		resizable: false,
+		minimizable: false,
+		maximizable: false,
+		fullscreenable: false,
+		alwaysOnTop: true,
+		movable: true,
+		show: false,
+		webPreferences: {
+			contextIsolation: true,
+			sandbox: true
+		}
+	});
+	attachNavigationGuards(splashWindow, (url) => url.startsWith("data:text/html"));
+	const resolvedSplashHtml = splash_default$1.replace("__SPLASH_STYLE__", splash_default).replace("__SPLASH_ICON_SRC__", resolveSplashIconDataUrl()).replace("__APP_VERSION__", app.getVersion());
+	splashWindow.loadURL(`data:text/html;charset=UTF-8,${encodeURIComponent(resolvedSplashHtml)}`);
+	splashWindow.once("ready-to-show", () => {
+		splashShownAt = Date.now();
+		splashWindow?.show();
+	});
+}
+function openSettingsWindow() {
+	if (settingsWindow && !settingsWindow.isDestroyed()) {
+		settingsWindow.focus();
+		return;
+	}
+	const parent = mainWindow && !mainWindow.isDestroyed() && mainWindow.isVisible() ? mainWindow : void 0;
+	settingsWindow = new BrowserWindow({
+		width: 780,
+		height: 400,
+		minWidth: 780,
+		minHeight: 400,
+		resizable: true,
+		title: "Konfiguration",
+		parent,
+		modal: Boolean(parent),
+		show: false,
+		backgroundColor: "#f5f5f7",
+		webPreferences: {
+			preload: path.join(__dirname, "preload.js"),
+			contextIsolation: true,
+			nodeIntegration: false,
+			sandbox: false
+		}
+	});
+	attachNavigationGuards(settingsWindow, (url) => url.startsWith("data:text/html"));
+	settingsWindow.setMenu(null);
+	const resolvedSettingsHtml = settings_default$2.replace("__SETTINGS_STYLE__", settings_default).replace("__SETTINGS_SCRIPT__", settings_default$1);
+	settingsWindow.loadURL(`data:text/html;charset=UTF-8,${encodeURIComponent(resolvedSettingsHtml)}`);
+	settingsWindow.once("ready-to-show", () => {
+		settingsWindow?.show();
+	});
+	settingsWindow.on("closed", () => {
+		settingsWindow = null;
+	});
+}
+function openWorkflowWindow(payload) {
+	const existingWorkflowWindow = workflowWindow;
+	if (existingWorkflowWindow && !existingWorkflowWindow.isDestroyed() && !existingWorkflowWindow.webContents.isDestroyed()) {
+		if (payload) workflowStartPayloadByWebContentsId.set(existingWorkflowWindow.webContents.id, payload);
+		existingWorkflowWindow.focus();
+		return;
+	}
+	const parent = mainWindow && !mainWindow.isDestroyed() && mainWindow.isVisible() ? mainWindow : void 0;
+	workflowWindow = new BrowserWindow({
 		width: 900,
 		height: 650,
 		minWidth: 780,
 		minHeight: 560,
-		resizable: !0,
-		title: "Konfiguration",
-		parent: t,
-		modal: !!t,
-		show: !1,
+		resizable: true,
+		title: "Exportdialog",
+		parent,
+		modal: Boolean(parent),
+		show: false,
 		backgroundColor: "#f5f5f7",
 		webPreferences: {
-			preload: e.join(Y, "preload.js"),
-			contextIsolation: !0,
-			nodeIntegration: !1,
-			sandbox: !1
+			preload: path.join(__dirname, "preload.js"),
+			contextIsolation: true,
+			nodeIntegration: false,
+			sandbox: false
 		}
-	}), H.setMenu(null), H.loadURL(`data:text/html;charset=UTF-8,${encodeURIComponent(d)}`), H.once("ready-to-show", () => {
-		H?.show();
-	}), H.on("closed", () => {
-		H = null;
+	});
+	const devOrigin = getDevServerOrigin();
+	attachNavigationGuards(workflowWindow, (url) => {
+		if (devOrigin) return url.startsWith(devOrigin);
+		return url.startsWith("file://");
+	});
+	if (payload) workflowStartPayloadByWebContentsId.set(workflowWindow.webContents.id, payload);
+	const workflowWebContentsId = workflowWindow.webContents.id;
+	workflowWindow.setMenu(null);
+	if (process.env.VITE_DEV_SERVER_URL) {
+		const dialogUrl = new URL(process.env.VITE_DEV_SERVER_URL);
+		dialogUrl.searchParams.set("window", "workflow");
+		workflowWindow.loadURL(dialogUrl.toString());
+	} else workflowWindow.loadFile(path.join(__dirname, "../index.html"), { query: { window: "workflow" } });
+	workflowWindow.once("ready-to-show", () => {
+		workflowWindow?.show();
+	});
+	workflowWindow.on("closed", () => {
+		workflowStartPayloadByWebContentsId.delete(workflowWebContentsId);
+		workflowWindow = null;
 	});
 }
-async function de(e = 2e3) {
-	if (U === 0) return;
-	let t = e - (Date.now() - U);
-	t <= 0 || await new Promise((e) => setTimeout(e, t));
+async function ensureMinimumSplashDuration(minimumMs = 2e3) {
+	if (splashShownAt === 0) return;
+	const remaining = minimumMs - (Date.now() - splashShownAt);
+	if (remaining <= 0) return;
+	await new Promise((resolve) => setTimeout(resolve, remaining));
 }
-function fe() {
-	let e = process.platform === "darwin", t = !!process.env.VITE_DEV_SERVER_URL, n = [
-		...e ? [{
-			label: o.name,
+function createApplicationMenu() {
+	const isMac = process.platform === "darwin";
+	const isDevMode = Boolean(process.env.VITE_DEV_SERVER_URL);
+	const template = [
+		...isMac ? [{
+			label: app.name,
 			submenu: [
 				{ role: "about" },
 				{ type: "separator" },
 				{
 					label: "Konfiguration",
 					accelerator: "CommandOrControl+,",
-					click: Q
+					click: openSettingsWindow
 				},
 				{ type: "separator" },
 				{ role: "hide" },
@@ -557,7 +868,7 @@ function fe() {
 				{
 					label: "Konfiguration",
 					accelerator: "CommandOrControl+,",
-					click: Q
+					click: openSettingsWindow
 				},
 				{ type: "separator" },
 				{ role: "quit" }
@@ -572,7 +883,7 @@ function fe() {
 				{ role: "cut" },
 				{ role: "copy" },
 				{ role: "paste" },
-				...e ? [
+				...isMac ? [
 					{ role: "pasteAndMatchStyle" },
 					{ role: "delete" },
 					{ role: "selectAll" },
@@ -588,7 +899,7 @@ function fe() {
 				]
 			]
 		},
-		...t ? [{
+		...isDevMode ? [{
 			label: "Entwickler",
 			submenu: [
 				{ role: "toggleDevTools" },
@@ -598,114 +909,91 @@ function fe() {
 			]
 		}] : []
 	];
-	a.setApplicationMenu(a.buildFromTemplate(n));
+	Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }
-function $() {
-	B = new i({
-		width: 500,
-		height: 500,
-		minWidth: 320,
-		minHeight: 320,
-		show: !1,
+function createMainWindow() {
+	mainWindow = new BrowserWindow({
+		width: 320,
+		height: 320,
+		useContentSize: true,
+		resizable: false,
+		maximizable: false,
+		fullscreenable: false,
+		show: false,
 		backgroundColor: "#f5f5f7",
 		webPreferences: {
-			preload: e.join(Y, "preload.js"),
-			contextIsolation: !0,
-			nodeIntegration: !1,
-			sandbox: !1
+			preload: path.join(__dirname, "preload.js"),
+			contextIsolation: true,
+			nodeIntegration: false,
+			sandbox: false
 		}
-	}), process.env.VITE_DEV_SERVER_URL ? B.loadURL(process.env.VITE_DEV_SERVER_URL) : B.loadFile(e.join(Y, "../index.html")), B.setAspectRatio(1), B.webContents.once("did-finish-load", async () => {
-		await de(2e3), V?.close(), V = null, B?.show(), q &&= (Q(), !1);
+	});
+	const devOrigin = getDevServerOrigin();
+	attachNavigationGuards(mainWindow, (url) => {
+		if (devOrigin) return url.startsWith(devOrigin);
+		return url.startsWith("file://");
+	});
+	if (process.env.VITE_DEV_SERVER_URL) mainWindow.loadURL(process.env.VITE_DEV_SERVER_URL);
+	else mainWindow.loadFile(path.join(__dirname, "../index.html"));
+	mainWindow.webContents.once("did-finish-load", async () => {
+		await ensureMinimumSplashDuration(2e3);
+		splashWindow?.close();
+		splashWindow = null;
+		mainWindow?.show();
+		if (shouldOpenSettingsOnStartup) {
+			openSettingsWindow();
+			shouldOpenSettingsOnStartup = false;
+		}
 	});
 }
-o.whenReady().then(() => (o.setName("immo24 EventPipe"), G = I(), K = k(G), L(G).then(async (e) => {
-	q = !e, W = X(e ? await R(G) : { ...N }), ue(), fe(), c.handle("eventpipe:get-settings", () => ({
-		settings: W,
-		configPath: G
-	})), c.handle("eventpipe:get-export-history", async (e, t) => oe(K, Math.max(1, Math.min(100, typeof t == "number" ? Math.floor(t) : 20)))), c.handle("eventpipe:pick-directory", async (e, t) => {
-		let n = H && !H.isDestroyed() ? H : B ?? void 0, r = {
-			title: "Ordner auswählen",
-			properties: [
-				"openDirectory",
-				"createDirectory",
-				"promptToCreate"
-			],
-			defaultPath: t?.trim() || void 0
-		}, i = n ? await s.showOpenDialog(n, r) : await s.showOpenDialog(r);
-		if (!(i.canceled || i.filePaths.length === 0)) return i.filePaths[0];
-	}), c.handle("eventpipe:save-settings", async (e, t) => {
-		let n = {
-			...W,
-			...t
-		};
-		return W = X(await z(G, n)), Z("Settings saved", { configPath: G }), {
-			settings: W,
-			configPath: G
-		};
-	}), c.handle("eventpipe:analyze-mxf", async (e, t) => (Z("Analyze MXF requested", { mxfPath: t }), { probe: await re(t, W.ffprobePath) })), c.handle("eventpipe:analyze-wav", async (e, t) => {
-		Z("Analyze WAV requested", { wavPath: t });
-		let n = await y(t, W.ffprobePath), r = ne(n);
-		if (!h(n.channels)) throw Error(`Unsupported channel count ${n.channels}. Allowed: 2, 4, 6, 8.`);
-		return {
-			probe: n,
-			classification: r,
-			mapping: r.type === "legacy-surround-print" ? _(n.channels) : g(n.channels, r.trackNames)
-		};
-	}), c.handle("eventpipe:export-job", async (e, t) => {
-		if (!t.mxfPath || !t.wavPath || t.mapping.length === 0) throw Error("Export request is incomplete.");
-		Z("Export requested", {
-			mxfPath: t.mxfPath,
-			wavPath: t.wavPath,
-			mappingEntries: t.mapping.length
-		}), e.sender.send("eventpipe:export-progress", { percent: 0 });
-		try {
-			let n = await O(t, W, (t) => {
-				e.sender.send("eventpipe:export-progress", t);
-			}), r = {
-				id: `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
-				timestamp: (/* @__PURE__ */ new Date()).toISOString(),
-				status: "success",
-				mxfPath: t.mxfPath,
-				wavPath: t.wavPath,
-				outputPath: n.outputPath,
-				tempOutputPath: n.tempOutputPath,
-				publishedPath: n.publishedPath,
-				publishConflictResolved: n.publishConflictResolved,
-				logPath: n.logPath,
-				detectedWavType: t.metadata?.detectedWavType,
-				selectedWavType: t.metadata?.selectedWavType,
-				manualSelectionApplied: t.metadata?.manualSelectionApplied,
-				classificationReason: t.metadata?.classificationReason,
-				mappingCount: t.mapping.length
-			};
-			return await A(K, r), e.sender.send("eventpipe:export-progress", { percent: 100 }), n;
-		} catch (e) {
-			let n = e instanceof Error ? e.message : String(e), r = n.match(/Export failed\. Log: (.+)\n/), i = {
-				id: `${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
-				timestamp: (/* @__PURE__ */ new Date()).toISOString(),
-				status: "error",
-				mxfPath: t.mxfPath,
-				wavPath: t.wavPath,
-				logPath: r?.[1]?.trim(),
-				errorMessage: n,
-				detectedWavType: t.metadata?.detectedWavType,
-				selectedWavType: t.metadata?.selectedWavType,
-				manualSelectionApplied: t.metadata?.manualSelectionApplied,
-				classificationReason: t.metadata?.classificationReason,
-				mappingCount: t.mapping.length
-			};
-			throw await A(K, i), e;
-		}
-	}), $(), o.on("second-instance", () => {
-		if (B) {
-			B.isMinimized() && B.restore(), B.focus();
-			return;
-		}
-		$();
-	}), o.on("activate", () => {
-		i.getAllWindows().length === 0 && $();
+app.whenReady().then(() => {
+	app.setName("immo24 EventPipe");
+	activeConfigPath = getConfigPath();
+	activeHistoryPath = getExportHistoryPath(activeConfigPath);
+	return hasSettingsFile(activeConfigPath).then(async (hasConfigFile) => {
+		shouldOpenSettingsOnStartup = !hasConfigFile;
+		activeSettings = withRuntimeDebugLogging(hasConfigFile ? await loadSettings(activeConfigPath) : { ...DEFAULT_SETTINGS });
+		createSplashWindow();
+		createApplicationMenu();
+		registerIpcHandlers({
+			getActiveSettings: () => activeSettings,
+			setActiveSettings: (settings) => {
+				activeSettings = settings;
+			},
+			getActiveConfigPath: () => activeConfigPath,
+			getActiveHistoryPath: () => activeHistoryPath,
+			openWorkflowWindow,
+			workflowStartPayloadByWebContentsId,
+			getDialogOwnerWindow: () => settingsWindow && !settingsWindow.isDestroyed() ? settingsWindow : mainWindow ?? void 0,
+			debugLog,
+			withRuntimeDebugLogging,
+			isTrustedRenderer: (webContentsId, frameUrl) => {
+				if (![
+					mainWindow?.webContents.id,
+					workflowWindow?.webContents.id,
+					settingsWindow?.webContents.id
+				].filter((id) => typeof id === "number").includes(webContentsId)) return false;
+				const devOrigin = getDevServerOrigin();
+				if (devOrigin && frameUrl.startsWith(devOrigin)) return true;
+				if (frameUrl.startsWith("file://") || frameUrl.startsWith("data:text/html")) return true;
+				return false;
+			}
+		});
+		createMainWindow();
+		app.on("second-instance", () => {
+			if (mainWindow) {
+				if (mainWindow.isMinimized()) mainWindow.restore();
+				mainWindow.focus();
+				return;
+			}
+			createMainWindow();
+		});
+		app.on("activate", () => {
+			if (BrowserWindow.getAllWindows().length === 0) createMainWindow();
+		});
 	});
-}))), o.on("window-all-closed", () => {
-	process.platform !== "darwin" && o.quit();
+});
+app.on("window-all-closed", () => {
+	app.quit();
 });
 //#endregion

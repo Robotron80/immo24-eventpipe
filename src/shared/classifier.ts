@@ -75,7 +75,7 @@ export function classifyWav(probe: WavProbeData): WavClassificationResult {
   const dtrkNames = extractDtrkNames(probe)
   if (dtrkNames.length > 0) {
     return {
-      type: 'bounce-polywav',
+      type: 'multitrack-wav',
       trackNames: dtrkNames,
       reason: 'dTRK metadata detected',
     }
@@ -93,7 +93,7 @@ export function classifyWav(probe: WavProbeData): WavClassificationResult {
 
   if (legacyLayoutDetected) {
     return {
-      type: 'legacy-surround-print',
+      type: 'legacy-surround-track',
       trackNames: [],
       reason: 'Legacy surround channel layout detected',
     }
@@ -101,7 +101,7 @@ export function classifyWav(probe: WavProbeData): WavClassificationResult {
 
   if (probe.channels === 2 || probe.channels === 4) {
     return {
-      type: 'legacy-surround-print',
+      type: 'legacy-surround-track',
       trackNames: [],
       reason: 'No dTRK metadata found for stereo/quad WAV, defaulting to legacy mapping',
     }

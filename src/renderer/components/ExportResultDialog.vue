@@ -1,21 +1,17 @@
 <script setup lang="ts">
 import { nextTick, onMounted, ref } from 'vue'
-import type { ExportHistoryEntry } from '../../shared/types'
 
 defineProps<{
   title: string
   error?: string
   exportMessage?: string
+  exportDurationLabel?: string
   exportLogPath?: string
-  exportDetails?: string
-  copyLogStatus: 'idle' | 'copied' | 'error'
-  copyDetailsStatus: 'idle' | 'copied' | 'error'
-  recentExportHistory: ExportHistoryEntry[]
+  logOpenStatus: 'idle' | 'error'
 }>()
 
 const emit = defineEmits<{
-  (event: 'copyLogPath'): void
-  (event: 'copyExportDetails'): void
+  (event: 'openLog'): void
   (event: 'close'): void
 }>()
 
@@ -29,44 +25,25 @@ onMounted(async () => {
 
 <template>
   <section class="overlay">
-    <div class="dialog dialog--checks">
+    <div class="dialog dialog--checks dialog--workflow-page dialog--workflow-result">
       <header class="dialog-header">
         <div>
           <h2>{{ title }}</h2>
-          <p>Exportstatus und Log-Ausgabe.</p>
+          <p>Status und Logs</p>
         </div>
       </header>
 
       <div class="dialog-body">
-        <section class="panel export-result-panel">
+        <section class="workflow-result-content export-result-panel">
           <h3>Status</h3>
           <p v-if="error" class="export-error">{{ error }}</p>
           <p v-else-if="exportMessage" class="export-message">{{ exportMessage }}</p>
+          <p v-if="exportDurationLabel" class="export-duration">Dauer: {{ exportDurationLabel }}</p>
 
-          <p v-if="exportLogPath" class="export-log-path">
-            Log: {{ exportLogPath }}
-            <button type="button" class="ghost export-log-copy" @click="emit('copyLogPath')">Log-Pfad kopieren</button>
-            <span v-if="copyLogStatus === 'copied'">Kopiert</span>
-            <span v-if="copyLogStatus === 'error'">Kopieren fehlgeschlagen</span>
-          </p>
-
-          <p v-if="exportDetails" class="export-log-path">
-            <button type="button" class="ghost export-log-copy" @click="emit('copyExportDetails')">
-              ffmpeg-Details kopieren
-            </button>
-            <span v-if="copyDetailsStatus === 'copied'">Kopiert</span>
-            <span v-if="copyDetailsStatus === 'error'">Kopieren fehlgeschlagen</span>
-          </p>
-
-          <section v-if="recentExportHistory.length > 0" class="export-history">
-            <h4>Letzte Exporte</h4>
-            <ul>
-              <li v-for="entry in recentExportHistory" :key="entry.id">
-                {{ new Date(entry.timestamp).toLocaleString() }} - {{ entry.status === 'success' ? 'OK' : 'ERROR' }}
-                <span v-if="entry.manualSelectionApplied"> (manuelle WAV-Auswahl)</span>
-              </li>
-            </ul>
-          </section>
+          <div v-if="exportLogPath" class="export-log-actions">
+            <button type="button" class="ghost export-log-open-button" @click="emit('openLog')">Log öffnen</button>
+            <span v-if="logOpenStatus === 'error'" class="export-log-open-error">Log konnte nicht geöffnet werden</span>
+          </div>
         </section>
       </div>
 

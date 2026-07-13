@@ -16,6 +16,7 @@
     "dist:win": "npm run build && electron-builder --win nsis --x64"
   },
   "dependencies": {
+    "@mdi/js": "^7.4.47",
     "vue": "^3.5.39"
   },
   "devDependencies": {
@@ -28,7 +29,6 @@
     "typescript": "~6.0.2",
     "vite": "^8.1.1",
     "vite-plugin-electron": "^0.29.0",
-    "vite-plugin-electron-renderer": "^0.14.6",
     "vitest": "^4.0.3",
     "vue-tsc": "^3.3.5"
   },
@@ -45,7 +45,7 @@
       "icon": "src/assets/icon.icns",
       "target": [
         "dmg"
-            ],
+      ],
       "category": "public.app-category.utilities"
     },
     "win": {
@@ -60,12 +60,11 @@
       "allowElevation": true,
       "createDesktopShortcut": true,
       "createStartMenuShortcut": true,
-      "license": "assets/license.txt",
+      "license": "src/assets/license_de.txt",
       "deleteAppDataOnUninstall": true
     },
     "directories": {
       "output": "release"
     }
-
   }
 }

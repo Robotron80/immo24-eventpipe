@@ -15,7 +15,7 @@ describe('classifyWav', () => {
 
     const result = classifyWav(probe)
 
-    expect(result.type).toBe('bounce-polywav')
+    expect(result.type).toBe('multitrack-wav')
     expect(result.trackNames).toEqual([
       'ST Stereo-L',
       'ST Stereo-R',
@@ -38,7 +38,7 @@ describe('classifyWav', () => {
 
     const result = classifyWav(probe)
 
-    expect(result.type).toBe('legacy-surround-print')
+    expect(result.type).toBe('legacy-surround-track')
     expect(result.trackNames).toEqual([])
   })
 
@@ -68,7 +68,7 @@ describe('classifyWav', () => {
 
     const result = classifyWav(probe)
 
-    expect(result.type).toBe('bounce-polywav')
+    expect(result.type).toBe('multitrack-wav')
     expect(result.trackNames).toEqual(['L', 'R', 'M', 'S'])
   })
 
@@ -83,7 +83,7 @@ describe('classifyWav', () => {
 
     const result = classifyWav(probe)
 
-    expect(result.type).toBe('bounce-polywav')
+    expect(result.type).toBe('multitrack-wav')
     expect(result.trackNames).toEqual([
       'ST Stereo-L',
       'ST Stereo-R',
@@ -113,7 +113,7 @@ describe('classifyWav', () => {
 
     const result = classifyWav(probe)
 
-    expect(result.type).toBe('bounce-polywav')
+    expect(result.type).toBe('multitrack-wav')
     expect(result.trackNames).toEqual([
       'ST Stereo-L',
       'ST Stereo-R',
@@ -137,7 +137,7 @@ describe('classifyWav', () => {
 
     const result = classifyWav(probe)
 
-    expect(result.type).toBe('bounce-polywav')
+    expect(result.type).toBe('multitrack-wav')
     expect(result.trackNames[7]).toBe('MU-R')
   })
 
@@ -152,7 +152,7 @@ describe('classifyWav', () => {
 
     const result = classifyWav(probe)
 
-    expect(result.type).toBe('bounce-polywav')
+    expect(result.type).toBe('multitrack-wav')
     expect(result.trackNames[7]).toBe('MU-R')
   })
 
@@ -165,7 +165,7 @@ describe('classifyWav', () => {
 
     const result = classifyWav(probe)
 
-    expect(result.type).toBe('legacy-surround-print')
+    expect(result.type).toBe('legacy-surround-track')
   })
 
   it('classifies plain quad WAV without dTRK as legacy', () => {
@@ -177,6 +177,6 @@ describe('classifyWav', () => {
 
     const result = classifyWav(probe)
 
-    expect(result.type).toBe('legacy-surround-print')
+    expect(result.type).toBe('legacy-surround-track')
   })
 })

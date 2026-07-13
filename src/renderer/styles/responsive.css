@@ -1,0 +1,66 @@
+@media (max-width: 980px) {
+  .drop-halves {
+    width: min(460px, 95%);
+    height: min(460px, 95%);
+  }
+
+  .drop-half svg {
+    width: clamp(118px, 34vw, 214px);
+    height: clamp(118px, 34vw, 214px);
+  }
+
+  .checkmark {
+    right: 9px;
+    bottom: -3px;
+  }
+
+  .dialog--checks {
+    min-height: min(500px, 88vh);
+  }
+}
+
+@media (max-width: 420px), (max-height: 420px) {
+  .drop-card {
+    border-width: 4px;
+    border-radius: 18px;
+  }
+
+  .drop-halves {
+    width: 96%;
+    height: 96%;
+  }
+
+  .drop-half svg {
+    width: clamp(106px, 38vw, 170px);
+    height: clamp(106px, 38vw, 170px);
+  }
+
+  .checkmark {
+    right: 8px;
+    bottom: -2px;
+  }
+
+  .dropzone-clear-x {
+    top: 8px;
+    right: 8px;
+    width: 19px;
+    height: 19px;
+    font-size: 13px;
+  }
+
+  .overlay {
+    padding: 10px;
+  }
+
+  .dialog--checks {
+    width: 100%;
+    min-height: min(420px, 92vh);
+  }
+
+  .dialog-header,
+  .dialog-body,
+  .dialog-footer {
+    padding-left: 14px;
+    padding-right: 14px;
+  }
+}

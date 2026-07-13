@@ -20,8 +20,13 @@ const api = {
     ipcRenderer.invoke('eventpipe:save-settings', settings),
   getExportHistory: (limit?: number): Promise<ExportHistoryEntry[]> =>
     ipcRenderer.invoke('eventpipe:get-export-history', limit),
+  openWorkflowWindow: (payload?: { mxfPath?: string; wavPath?: string }): Promise<boolean> =>
+    ipcRenderer.invoke('eventpipe:open-workflow-window', payload),
+  getWorkflowStartPayload: (): Promise<{ mxfPath?: string; wavPath?: string } | undefined> =>
+    ipcRenderer.invoke('eventpipe:get-workflow-start-payload'),
   pickDirectory: (initialPath?: string): Promise<string | undefined> =>
     ipcRenderer.invoke('eventpipe:pick-directory', initialPath),
+  openPath: (targetPath: string): Promise<boolean> => ipcRenderer.invoke('eventpipe:open-path', targetPath),
   onExportProgress: (listener: (update: ExportProgressUpdate) => void): (() => void) => {
     const handler = (_event: Electron.IpcRendererEvent, update: ExportProgressUpdate) => {
       listener(update)
