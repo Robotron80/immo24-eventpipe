@@ -40,6 +40,27 @@ export function useFileAnalysisState(options: UseFileAnalysisStateOptions) {
     return window.eventPipe
   }
 
+  function normalizeIpcErrorMessage(message: string): string {
+    return message
+      .replace(/^Error invoking remote method '[^']+':\s*/i, '')
+      .replace(/^Error:\s*/i, '')
+      .trim()
+  }
+
+  function getReadableErrorMessage(analysisError: unknown, fallback: string): string {
+    if (analysisError instanceof Error) {
+      const normalized = normalizeIpcErrorMessage(analysisError.message)
+      return normalized.length > 0 ? normalized : fallback
+    }
+
+    if (typeof analysisError === 'string') {
+      const normalized = normalizeIpcErrorMessage(analysisError)
+      return normalized.length > 0 ? normalized : fallback
+    }
+
+    return fallback
+  }
+
   function parseChannelLayoutNames(layout?: string): string[] {
     if (!layout) {
       return []
@@ -104,7 +125,7 @@ export function useFileAnalysisState(options: UseFileAnalysisStateOptions) {
       mxfDurationSeconds.value = analysis.probe.durationSeconds
       mxfAnalysisState.value = 'ok'
     } catch (analysisError) {
-      const message = analysisError instanceof Error ? analysisError.message : 'Unknown MXF analysis error'
+      const message = getReadableErrorMessage(analysisError, 'MXF-Datei konnte nicht analysiert werden.')
       error.value = message
       mxfAnalysisError.value = message
       mxfDurationSeconds.value = undefined
@@ -135,7 +156,7 @@ export function useFileAnalysisState(options: UseFileAnalysisStateOptions) {
           : analysis.mapping
       wavAnalysisState.value = 'ok'
     } catch (analysisError) {
-      const message = analysisError instanceof Error ? analysisError.message : 'Unknown analysis error'
+      const message = getReadableErrorMessage(analysisError, 'WAV-Datei konnte nicht analysiert werden.')
       error.value = message
       wavAnalysisError.value = message
       wavType.value = undefined

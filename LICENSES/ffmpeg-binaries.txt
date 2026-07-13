@@ -1,0 +1,19 @@
+Bundled ffmpeg/ffprobe binaries
+
+Source used by current macOS build:
+- /opt/homebrew/bin/ffmpeg
+- /opt/homebrew/bin/ffprobe
+
+Detected version at build time:
+- ffmpeg 8.1
+- ffprobe 8.1
+
+Detected ffmpeg build flags include --enable-gpl.
+For this binary source, treat the bundled ffmpeg/ffprobe binaries as GPL-licensed.
+
+Included license files:
+- GPL-3.0.txt
+- ffmpeg-license-homebrew.md
+
+If you switch binary source or version, update this notice and the corresponding
+license files in LICENSES/.

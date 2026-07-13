@@ -62,7 +62,14 @@ export async function analyzeWavWithFfprobe(wavPath: string, ffprobePath: string
 
     child.on('close', (code) => {
       if (code !== 0) {
-        reject(new Error(`ffprobe exited with code ${code}: ${stderr.trim()}`))
+        const details = stderr.trim()
+
+        if (/invalid data found when processing input/i.test(details)) {
+          reject(new Error('Die ausgewählte Datei ist kein lesbares WAV.'))
+          return
+        }
+
+        reject(new Error('Die ausgewählte Datei ist kein lesbares WAV oder verwendet ein nicht unterstütztes Audioformat.'))
         return
       }
 
@@ -71,7 +78,7 @@ export async function analyzeWavWithFfprobe(wavPath: string, ffprobePath: string
         const audioStream = parsed.streams?.find((stream) => typeof stream.channels === 'number')
 
         if (!audioStream || typeof audioStream.channels !== 'number') {
-          reject(new Error('No audio stream with channel information found in WAV file'))
+          reject(new Error('Die ausgewählte Datei ist kein lesbares WAV oder enthält keinen verwertbaren Audiostream.'))
           return
         }
 

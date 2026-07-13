@@ -87,6 +87,7 @@ function resolveSplashIconDataUrl(): string {
   // Splash is delivered as inline HTML, so image data is injected as base64 URL.
   const appPath = app.getAppPath()
   const candidates = [
+    path.resolve(process.resourcesPath, 'assets/icon.png'),
     path.resolve(appPath, 'src/assets/icon.png'),
     path.resolve(appPath, 'dist/assets/icon.png'),
   ]
@@ -109,12 +110,14 @@ function createSplashWindow(): void {
     height: 250,
     frame: false,
     transparent: true,
+    backgroundColor: '#00000000',
     resizable: false,
     minimizable: false,
     maximizable: false,
+    center: true,
     fullscreenable: false,
     alwaysOnTop: true,
-    movable: true,
+    movable: false,
     show: false,
     webPreferences: {
       contextIsolation: true,
@@ -129,10 +132,8 @@ function createSplashWindow(): void {
     .replace('__SPLASH_ICON_SRC__', resolveSplashIconDataUrl())
     .replace('__APP_VERSION__', app.getVersion())
   splashWindow.loadURL(`data:text/html;charset=UTF-8,${encodeURIComponent(resolvedSplashHtml)}`)
-  splashWindow.once('ready-to-show', () => {
-    splashShownAt = Date.now()
-    splashWindow?.show()
-  })
+  splashShownAt = Date.now()
+  splashWindow.show()
 }
 
 function openSettingsWindow(): void {
@@ -235,7 +236,7 @@ function openWorkflowWindow(payload?: { mxfPath?: string; wavPath?: string }): v
     dialogUrl.searchParams.set('window', 'workflow')
     workflowWindow.loadURL(dialogUrl.toString())
   } else {
-    workflowWindow.loadFile(path.join(__dirname, '../index.html'), {
+    workflowWindow.loadFile(path.join(__dirname, '../dist/index.html'), {
       query: { window: 'workflow' },
     })
   }
@@ -354,7 +355,7 @@ function createMainWindow(): void {
   if (process.env.VITE_DEV_SERVER_URL) {
     mainWindow.loadURL(process.env.VITE_DEV_SERVER_URL)
   } else {
-    mainWindow.loadFile(path.join(__dirname, '../index.html'))
+    mainWindow.loadFile(path.join(__dirname, '../dist/index.html'))
   }
 
   mainWindow.webContents.once('did-finish-load', async () => {

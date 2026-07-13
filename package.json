@@ -1,19 +1,28 @@
 {
   "name": "immo24-eventpipe",
-  "private": true,
   "version": "1.0.0-beta",
   "type": "module",
   "main": "dist-electron/index.js",
+  "description": "Applikation zum Muxen von WAV- und MXF-Files",
   "author": "Philipp Menzel",
   "license": "AGPL-3.0-only",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Robotron80/immo24-eventpipe.git"
+  },
+  "homepage": "https://github.com/Robotron80/immo24-eventpipe",
+  "bugs": {
+    "url": "https://github.com/Robotron80/immo24-eventpipe/issues"
+  },
   "scripts": {
+    "prepare:binaries": "node scripts/copy-platform-binaries.mjs",
     "dev": "vite --port 5173 --strictPort",
     "build": "vue-tsc -b && vite build",
     "preview": "vite preview",
     "test": "vitest run",
-    "dist": "npm run build && electron-builder",
-    "dist:mac": "npm run build && electron-builder --mac dmg --arm64",
-    "dist:win": "npm run build && electron-builder --win nsis --x64"
+    "dist": "npm run prepare:binaries && npm run build && electron-builder",
+    "dist:mac": "EVENTPIPE_BINARY_TARGET=darwin-arm64 npm run prepare:binaries && npm run build && electron-builder --mac dmg --arm64",
+    "dist:win": "EVENTPIPE_BINARY_TARGET=win32-x64 npm run prepare:binaries && npm run build && electron-builder --win nsis --x64"
   },
   "dependencies": {
     "@mdi/js": "^7.4.47",
@@ -38,7 +47,18 @@
     "files": [
       "dist/**/*",
       "dist-electron/**/*",
+      "LICENSES/**/*",
       "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "resources/bin",
+        "to": "bin"
+      },
+      {
+        "from": "src/assets/icon.png",
+        "to": "assets/icon.png"
+      }
     ],
     "asar": true,
     "mac": {

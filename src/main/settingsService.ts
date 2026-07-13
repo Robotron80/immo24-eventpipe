@@ -8,29 +8,23 @@ export const CONFIG_FILE_NAME = 'config.json'
 
 function resolveBinaryPath(binaryName: string): string {
   const executableName = process.platform === 'win32' ? `${binaryName}.exe` : binaryName
-  const bundledCandidates = [
-    path.join(process.resourcesPath, 'bin', executableName),
-    path.join(process.resourcesPath, 'tools', executableName),
-    path.join(process.cwd(), 'resources', 'bin', executableName),
+
+  const platformBinaryCandidates = [
+    path.join(process.resourcesPath, 'bin', `${process.platform}-${process.arch}`, executableName),
+    path.join(process.cwd(), 'resources', 'bin', `${process.platform}-${process.arch}`, executableName),
   ]
 
-  for (const candidate of bundledCandidates) {
+  for (const candidate of platformBinaryCandidates) {
     if (existsSync(candidate)) {
       return candidate
     }
   }
 
-  if (process.platform === 'darwin') {
-    const macCandidates = ['/opt/homebrew/bin', '/usr/local/bin']
-    for (const dir of macCandidates) {
-      const candidate = path.join(dir, binaryName)
-      if (existsSync(candidate)) {
-        return candidate
-      }
-    }
+  if (process.env.EVENTPIPE_ALLOW_SYSTEM_BINARY_FALLBACK === '1') {
+    return binaryName
   }
 
-  return binaryName
+  throw new Error(`Bundled ${binaryName} binary not found for ${process.platform}-${process.arch}.`)
 }
 
 export const DEFAULT_SETTINGS: EventPipeSettings = {
